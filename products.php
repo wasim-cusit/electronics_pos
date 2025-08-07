@@ -16,10 +16,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
     $cost_price = $_POST['cost_price'];
     $sale_price = $_POST['sale_price'];
     $stock_quantity = $_POST['stock_quantity'];
+    $low_stock_threshold = $_POST['low_stock_threshold'];
     $barcode = $_POST['barcode'];
 
-    $stmt = $pdo->prepare("INSERT INTO products (name, category_id, unit, size, color, brand, cost_price, sale_price, stock_quantity, barcode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$name, $category_id, $unit, $size, $color, $brand, $cost_price, $sale_price, $stock_quantity, $barcode]);
+    $stmt = $pdo->prepare("INSERT INTO products (name, category_id, unit, size, color, brand, cost_price, sale_price, stock_quantity, low_stock_threshold, barcode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$name, $category_id, $unit, $size, $color, $brand, $cost_price, $sale_price, $stock_quantity, $low_stock_threshold, $barcode]);
     header("Location: products.php?success=added");
     exit;
 }
@@ -45,10 +46,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_product'])) {
     $cost_price = $_POST['cost_price'];
     $sale_price = $_POST['sale_price'];
     $stock_quantity = $_POST['stock_quantity'];
+    $low_stock_threshold = $_POST['low_stock_threshold'];
     $barcode = $_POST['barcode'];
 
-    $stmt = $pdo->prepare("UPDATE products SET name=?, category_id=?, unit=?, size=?, color=?, brand=?, cost_price=?, sale_price=?, stock_quantity=?, barcode=? WHERE id=?");
-    $stmt->execute([$name, $category_id, $unit, $size, $color, $brand, $cost_price, $sale_price, $stock_quantity, $barcode, $id]);
+    $stmt = $pdo->prepare("UPDATE products SET name=?, category_id=?, unit=?, size=?, color=?, brand=?, cost_price=?, sale_price=?, stock_quantity=?, low_stock_threshold=?, barcode=? WHERE id=?");
+    $stmt->execute([$name, $category_id, $unit, $size, $color, $brand, $cost_price, $sale_price, $stock_quantity, $low_stock_threshold, $barcode, $id]);
     header("Location: products.php?success=updated");
     exit;
 }
@@ -97,11 +99,11 @@ include 'includes/header.php';
                             <input type="hidden" name="id" value="<?= $edit_product['id'] ?>">
                         <?php endif; ?>
                         <div class="row">
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Name</label>
                                 <input type="text" name="name" class="form-control" required value="<?= htmlspecialchars($edit_product['name'] ?? '') ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="mb-3" style="width: 20%;">
                                 <label class="form-label">Category</label>
                                 <select name="category_id" class="form-control" required>
                                     <option value="">Select</option>
@@ -112,43 +114,48 @@ include 'includes/header.php';
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="mb-3" style="width: 15%;">
                                 <label class="form-label">Unit</label>
                                 <select name="unit" class="form-control" required>
-                                    <option value="piece" <?= (isset($edit_product['unit']) && $edit_product['unit'] == 'piece') ? 'selected' : '' ?>>Piece</option>
                                     <option value="meter" <?= (isset($edit_product['unit']) && $edit_product['unit'] == 'meter') ? 'selected' : '' ?>>Meter</option>
+                                    <option value="piece" <?= (isset($edit_product['unit']) && $edit_product['unit'] == 'piece') ? 'selected' : '' ?>>Piece</option>
                                     <option value="set" <?= (isset($edit_product['unit']) && $edit_product['unit'] == 'set') ? 'selected' : '' ?>>Set</option>
                                 </select>
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="mb-3" style="width: 15%;">
                                 <label class="form-label">Size</label>
                                 <input type="text" name="size" class="form-control" value="<?= htmlspecialchars($edit_product['size'] ?? '') ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="mb-3" style="width: 20%;">
                                 <label class="form-label">Color</label>
                                 <input type="text" name="color" class="form-control" value="<?= htmlspecialchars($edit_product['color'] ?? '') ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Brand</label>
                                 <input type="text" name="brand" class="form-control" value="<?= htmlspecialchars($edit_product['brand'] ?? '') ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="mb-3" style="width: 20%;">
                                 <label class="form-label">Cost Price</label>
                                 <input type="number" step="0.01" name="cost_price" class="form-control" required value="<?= htmlspecialchars($edit_product['cost_price'] ?? '') ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="mb-3" style="width: 15%;">
                                 <label class="form-label">Sale Price</label>
                                 <input type="number" step="0.01" name="sale_price" class="form-control" required value="<?= htmlspecialchars($edit_product['sale_price'] ?? '') ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="mb-3" style="width: 15%;">
                                 <label class="form-label">Stock Quantity</label>
                                 <input type="number" step="0.01" name="stock_quantity" class="form-control" required value="<?= htmlspecialchars($edit_product['stock_quantity'] ?? '') ?>">
-                                <small class="text-muted">Use decimals for meters (e.g., 2.5)</small>
+                                <small class="text-muted">Use decimals for meters (e.g., 4.5)</small>
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="mb-3" style="width: 15%;">
+                                <label class="form-label">Low Stock Alert</label>
+                                <input type="number" step="0.01" name="low_stock_threshold" class="form-control" required value="<?= htmlspecialchars($edit_product['low_stock_threshold'] ?? '') ?>">
+                                <small class="text-muted">Alert when stock falls below this value</small>
+                            </div>
+                            <!-- <div class="col-md-4 mb-3">
                                 <label class="form-label">Barcode</label>
                                 <input type="text" name="barcode" class="form-control" value="<?= htmlspecialchars($edit_product['barcode'] ?? '') ?>">
-                            </div>
+                            </div> -->
                         </div>
                         <button type="submit" class="btn btn-primary" name="<?= $edit_product ? 'edit_product' : 'add_product' ?>">
                             <?= $edit_product ? "Update Product" : "Add Product" ?>
@@ -164,7 +171,7 @@ include 'includes/header.php';
             <div class="card">
                 <div class="card-header">Product List</div>
                 <div class="card-body table-responsive">
-                    <table class="table table-bordered table-striped">
+                    <table class="table table-bordered table-striped table-hover">
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -176,7 +183,8 @@ include 'includes/header.php';
                                 <th>Cost Price</th>
                                 <th>Sale Price</th>
                                 <th>Stock</th>
-                                <th>Barcode</th>
+                                <th>Low Stock Threshold</th>
+                                <!-- <th>Barcode</th> -->
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -192,7 +200,8 @@ include 'includes/header.php';
                                     <td><?= htmlspecialchars($product['cost_price']) ?></td>
                                     <td><?= htmlspecialchars($product['sale_price']) ?></td>
                                     <td><?= htmlspecialchars($product['stock_quantity']) ?></td>
-                                    <td><?= htmlspecialchars($product['barcode']) ?></td>
+                                    <td><?= htmlspecialchars($product['low_stock_threshold']) ?></td>
+                                    <!-- <td><?= htmlspecialchars($product['barcode']) ?></td> -->
                                     <td>
                                         <a href="products.php?edit=<?= $product['id'] ?>" class="btn btn-sm btn-primary">Edit</a>
                                         <a href="products.php?delete=<?= $product['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete this product?')">Delete</a>
@@ -200,7 +209,9 @@ include 'includes/header.php';
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (empty($products)): ?>
-                                <tr><td colspan="11" class="text-center">No products found.</td></tr>
+                                <tr>
+                                    <td colspan="11" class="text-center">No products found.</td>
+                                </tr>
                             <?php endif; ?>
                         </tbody>
                     </table>

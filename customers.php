@@ -82,15 +82,15 @@ include 'includes/header.php';
                             <input type="hidden" name="id" value="<?= $edit_customer['id'] ?>">
                         <?php endif; ?>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Name</label>
                                 <input type="text" name="name" class="form-control" required value="<?= htmlspecialchars($edit_customer['name'] ?? '') ?>">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Contact</label>
                                 <input type="text" name="contact" class="form-control" value="<?= htmlspecialchars($edit_customer['contact'] ?? '') ?>">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Email</label>
                                 <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($edit_customer['email'] ?? '') ?>">
                             </div>

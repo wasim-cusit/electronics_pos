@@ -5,10 +5,18 @@ require_once 'includes/config.php';
 
 $activePage = 'purchases';
 
+// Get the next invoice number
+function get_next_invoice_no($pdo) {
+    $stmt = $pdo->query("SELECT MAX(id) AS max_id FROM purchases");
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $next = ($row && $row['max_id']) ? $row['max_id'] + 1 : 1;
+    return 'INV-' . str_pad($next, 3, '0', STR_PAD_LEFT);
+}
+
 // Handle Add Purchase
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
     $supplier_id = $_POST['supplier_id'];
-    $invoice_no = $_POST['invoice_no'];
+    $invoice_no = get_next_invoice_no($pdo);
     $purchase_date = $_POST['purchase_date'];
     $total_amount = $_POST['total_amount'];
     $created_by = $_SESSION['user_id'];
@@ -35,6 +43,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
             // Add stock movement
             $stmt = $pdo->prepare("INSERT INTO stock_movements (product_id, movement_type, quantity, note, created_by) VALUES (?, 'purchase', ?, 'Purchase from supplier', ?)");
             $stmt->execute([$product_ids[$i], $quantities[$i], $created_by]);
+
+            // Check for low stock and create notification if needed
+            $stmt = $pdo->prepare("SELECT name, stock_quantity, low_stock_threshold FROM products WHERE id = ?");
+            $stmt->execute([$product_ids[$i]]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($product && $product['stock_quantity'] <= $product['low_stock_threshold']) {
+                $msg = 'Low stock alert: ' . $product['name'] . ' stock is ' . $product['stock_quantity'] . ' (threshold: ' . $product['low_stock_threshold'] . ')';
+                $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message) VALUES (?, 'Low Stock', ?)");
+                $stmt->execute([$created_by, $msg]);
+            }
         }
     }
 
@@ -104,25 +122,22 @@ include 'includes/header.php';
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-3 mb-3 d-none">
                                 <label class="form-label">Invoice No</label>
-                                <input type="text" name="invoice_no" class="form-control" required>
+                                <input type="text" name="invoice_no" class="form-control" value="<?= get_next_invoice_no($pdo) ?>" readonly>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label">Purchase Date</label>
                                 <input type="date" name="purchase_date" class="form-control" required value="<?= date('Y-m-d') ?>">
                             </div>
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Total Amount</label>
-                                <input type="number" step="0.01" name="total_amount" class="form-control" required>
-                            </div>
+                            
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label">Purchase Items</label>
                             <div id="purchaseItems">
                                 <div class="row mb-2">
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <select name="product_id[]" class="form-control product-select" required>
                                             <option value="">Select Product</option>
                                             <?php foreach ($products as $product): ?>
@@ -130,24 +145,28 @@ include 'includes/header.php';
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div style="width: 15%;">
                                         <input type="number" step="0.01" name="quantity[]" class="form-control quantity" placeholder="Qty" required>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div style="width: 15%;">
                                         <input type="number" step="0.01" name="unit_price[]" class="form-control unit-price" placeholder="Unit Price" required>
                                     </div>
-                                    <div class="col-md-2">
+                                    <div style="width: 15%;">
                                         <input type="number" step="0.01" name="total_price[]" class="form-control total-price" placeholder="Total" readonly>
                                     </div>
                                     <div class="col-md-2">
                                         <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="addItem">Add Item</button>
                                     </div>
                                 </div>
                             </div>
-                            <button type="button" class="btn btn-secondary btn-sm" id="addItem">Add Item</button>
                         </div>
-
+                        
                         <button type="submit" class="btn btn-primary" name="add_purchase">Add Purchase</button>
+                        <div class="col-md-3 mb-3 float-end">
+                            <label class="form-label">Total Amount</label>
+                            <input type="number" step="0.01" name="total_amount" id="grandTotal" class="form-control" required readonly>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -177,6 +196,7 @@ include 'includes/header.php';
                                     <td><?= htmlspecialchars($purchase['created_by_name']) ?></td>
                                     <td>
                                         <a href="purchase_details.php?id=<?= $purchase['id'] ?>" class="btn btn-sm btn-info">View</a>
+                                        <a href="print_purchase.php?id=<?= $purchase['id'] ?>" class="btn btn-sm btn-secondary" target="_blank">Print</a>
                                         <a href="purchases.php?delete=<?= $purchase['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete this purchase?')">Delete</a>
                                     </td>
                                 </tr>
@@ -198,12 +218,17 @@ document.getElementById('addItem').addEventListener('click', function() {
     const newRow = container.children[0].cloneNode(true);
     newRow.querySelectorAll('input, select').forEach(input => input.value = '');
     container.appendChild(newRow);
+    
+    // Recalculate grand total after adding new row
+    calculateGrandTotal();
 });
 
 document.addEventListener('click', function(e) {
     if (e.target.classList.contains('remove-item')) {
         if (document.querySelectorAll('.remove-item').length > 1) {
             e.target.closest('.row').remove();
+            // Recalculate grand total after removing row
+            calculateGrandTotal();
         }
     }
 });
@@ -217,8 +242,31 @@ document.addEventListener('input', function(e) {
         
         if (quantity && unitPrice) {
             totalPrice.value = (quantity * unitPrice).toFixed(2);
+        } else {
+            totalPrice.value = '';
         }
+        
+        // Calculate grand total
+        calculateGrandTotal();
     }
+});
+
+function calculateGrandTotal() {
+    const totalPrices = document.querySelectorAll('.total-price');
+    let grandTotal = 0;
+    
+    totalPrices.forEach(input => {
+        if (input.value && !isNaN(input.value)) {
+            grandTotal += parseFloat(input.value);
+        }
+    });
+    
+    document.getElementById('grandTotal').value = grandTotal.toFixed(2);
+}
+
+// Calculate grand total when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    calculateGrandTotal();
 });
 </script>
 
