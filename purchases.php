@@ -50,8 +50,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
             $product = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($product && $product['stock_quantity'] <= $product['low_stock_threshold']) {
                 $msg = 'Low stock alert: ' . $product['name'] . ' stock is ' . $product['stock_quantity'] . ' (threshold: ' . $product['low_stock_threshold'] . ')';
-                $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message) VALUES (?, 'Low Stock', ?)");
+                // Prevent duplicate unread notifications for this product and user
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'Low Stock' AND message = ? AND is_read = 0");
                 $stmt->execute([$created_by, $msg]);
+                $exists = $stmt->fetchColumn();
+                if (!$exists) {
+                    $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message) VALUES (?, 'Low Stock', ?)");
+                    $stmt->execute([$created_by, $msg]);
+                }
             }
         }
     }

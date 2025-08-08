@@ -39,7 +39,7 @@ foreach ($expenses as $expense) {
 }
 
 // Low stock report
-$low_stock_products = $pdo->query("SELECT * FROM products WHERE stock_quantity < 5 ORDER BY stock_quantity ASC")->fetchAll(PDO::FETCH_ASSOC);
+$low_stock_products = $pdo->query("SELECT * FROM products WHERE stock_quantity <= low_stock_threshold ORDER BY stock_quantity ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Get data for charts
 // Monthly sales data for the last 6 months

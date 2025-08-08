@@ -1,7 +1,11 @@
 <?php
 require_once 'includes/auth.php';
 require_login();
+require_once 'includes/config.php';
 $activePage = 'dashboard';
+// Query for low stock count
+$stmt = $pdo->query("SELECT COUNT(*) FROM products WHERE stock_quantity <= low_stock_threshold");
+$low_stock_count = $stmt->fetchColumn();
 include 'includes/header.php';
 ?>
 <?php include 'includes/sidebar.php'; ?>
@@ -36,7 +40,7 @@ include 'includes/header.php';
       <div class="card text-bg-danger mb-3">
         <div class="card-body">
           <h5 class="card-title">Low Stock Alerts</h5>
-          <p class="card-text display-6">0</p>
+          <p class="card-text display-6"><?= $low_stock_count ?></p>
         </div>
       </div>
     </div>

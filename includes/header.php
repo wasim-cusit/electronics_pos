@@ -120,6 +120,14 @@
 <body>
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
+$unread_count = 0;
+if (is_logged_in()) {
+    $user_id = $_SESSION['user_id'];
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0");
+    $stmt->execute([$user_id]);
+    $unread_count = $stmt->fetchColumn();
+}
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top shadow-sm">
   <div class="container-fluid">
@@ -131,6 +139,11 @@ require_once __DIR__ . '/config.php';
       <li class="nav-item me-3">
         <a class="nav-link position-relative" href="<?= $base_url ?>notifications.php">
           <i class="bi bi-bell fs-5"></i>
+          <?php if ($unread_count > 0): ?>
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.7em;">
+              <?= $unread_count ?>
+            </span>
+          <?php endif; ?>
         </a>
       </li>
       <li class="nav-item dropdown">

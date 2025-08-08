@@ -1,5 +1,15 @@
 <?php
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
+
+// Get unread notification count
+$unread_count = 0;
+if (is_logged_in()) {
+    $user_id = $_SESSION['user_id'];
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0");
+    $stmt->execute([$user_id]);
+    $unread_count = $stmt->fetchColumn();
+}
 ?>
 <nav class="sidebar" id="sidebar">
   <div class="p-3">
@@ -50,8 +60,13 @@ require_once __DIR__ . '/config.php';
     </ul>
     <ul class="nav flex-column mb-4">
       <li class="nav-item mb-2">
-        <a class="nav-link<?= $activePage === 'notifications' ? ' active' : '' ?>" href="<?= $base_url ?>notifications.php">
+        <a class="nav-link position-relative<?= $activePage === 'notifications' ? ' active' : '' ?>" href="<?= $base_url ?>notifications.php">
           <i class="bi bi-bell me-2"></i>Notifications
+          <?php if ($unread_count > 0): ?>
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.7em; margin-left: 5px;">
+              <?= $unread_count ?>
+            </span>
+          <?php endif; ?>
         </a>
       </li>
       <li class="nav-item mb-2">
