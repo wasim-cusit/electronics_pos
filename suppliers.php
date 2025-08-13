@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_supplier'])) {
     $address = $_POST['address'];
     $email = $_POST['email'];
 
-    $stmt = $pdo->prepare("INSERT INTO suppliers (name, contact, address, email) VALUES (?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO supplier (supplier_name, supplier_contact, supplier_address, supplier_email) VALUES (?, ?, ?, ?)");
     $stmt->execute([$name, $contact, $address, $email]);
     header("Location: suppliers.php?success=added");
     exit;
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_supplier'])) {
     $address = $_POST['address'];
     $email = $_POST['email'];
 
-    $stmt = $pdo->prepare("UPDATE suppliers SET name=?, contact=?, address=?, email=? WHERE id=?");
+    $stmt = $pdo->prepare("UPDATE supplier SET supplier_name=?, supplier_contact=?, supplier_address=?, supplier_email=? WHERE id=?");
     $stmt->execute([$name, $contact, $address, $email, $id]);
     header("Location: suppliers.php?success=updated");
     exit;
@@ -35,20 +35,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_supplier'])) {
 // Handle Delete Supplier
 if (isset($_GET['delete'])) {
     $id = intval($_GET['delete']);
-    $stmt = $pdo->prepare("DELETE FROM suppliers WHERE id = ?");
+    $stmt = $pdo->prepare("DELETE FROM supplier WHERE id = ?");
     $stmt->execute([$id]);
     header("Location: suppliers.php?success=deleted");
     exit;
 }
 
 // Fetch all suppliers
-$suppliers = $pdo->query("SELECT * FROM suppliers ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+$suppliers = $pdo->query("SELECT * FROM supplier ORDER BY supplier_name")->fetchAll(PDO::FETCH_ASSOC);
 
 // If editing, fetch supplier
 $edit_supplier = null;
 if (isset($_GET['edit'])) {
     $id = intval($_GET['edit']);
-    $stmt = $pdo->prepare("SELECT * FROM suppliers WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM supplier WHERE id = ?");
     $stmt->execute([$id]);
     $edit_supplier = $stmt->fetch(PDO::FETCH_ASSOC);
 }
@@ -84,19 +84,19 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Name</label>
-                                <input type="text" name="name" class="form-control" required value="<?= htmlspecialchars($edit_supplier['name'] ?? '') ?>">
+                                <input type="text" name="name" class="form-control" required value="<?= htmlspecialchars($edit_supplier['supplier_name'] ?? '') ?>">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Contact</label>
-                                <input type="text" name="contact" class="form-control" value="<?= htmlspecialchars($edit_supplier['contact'] ?? '') ?>">
+                                <input type="text" name="contact" class="form-control" value="<?= htmlspecialchars($edit_supplier['supplier_contact'] ?? '') ?>">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Email</label>
-                                <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($edit_supplier['email'] ?? '') ?>">
+                                <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($edit_supplier['supplier_email'] ?? '') ?>">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Address</label>
-                                <textarea name="address" class="form-control" rows="3"><?= htmlspecialchars($edit_supplier['address'] ?? '') ?></textarea>
+                                <textarea name="address" class="form-control" rows="3"><?= htmlspecialchars($edit_supplier['supplier_address'] ?? '') ?></textarea>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary" name="<?= $edit_supplier ? 'edit_supplier' : 'add_supplier' ?>">
@@ -127,10 +127,10 @@ include 'includes/header.php';
                         <tbody>
                             <?php foreach ($suppliers as $supplier): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($supplier['name']) ?></td>
-                                    <td><?= htmlspecialchars($supplier['contact']) ?></td>
-                                    <td><?= htmlspecialchars($supplier['email']) ?></td>
-                                    <td><?= htmlspecialchars($supplier['address']) ?></td>
+                                    <td><?= htmlspecialchars($supplier['supplier_name']) ?></td>
+                                    <td><?= htmlspecialchars($supplier['supplier_contact']) ?></td>
+                                    <td><?= htmlspecialchars($supplier['supplier_email']) ?></td>
+                                    <td><?= htmlspecialchars($supplier['supplier_address']) ?></td>
                                     <td><?= htmlspecialchars($supplier['created_at']) ?></td>
                                     <td>
                                         <a href="suppliers.php?edit=<?= $supplier['id'] ?>" class="btn btn-sm btn-primary">Edit</a>

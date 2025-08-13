@@ -12,11 +12,11 @@ if (!$purchase_id) {
 
 // Fetch purchase details
 $stmt = $pdo->prepare("
-    SELECT p.*, s.name AS supplier_name, s.contact AS supplier_contact, s.address AS supplier_address, s.email AS supplier_email,
+    SELECT p.*, s.supplier_name, s.supplier_contact, s.supplier_address, s.supplier_email,
            u.username AS created_by_name
-    FROM purchases p 
-    LEFT JOIN suppliers s ON p.supplier_id = s.id 
-    LEFT JOIN users u ON p.created_by = u.id 
+    FROM purchase p 
+    LEFT JOIN supplier s ON p.supplier_id = s.id 
+    LEFT JOIN system_users u ON p.created_by = u.id 
     WHERE p.id = ?
 ");
 $stmt->execute([$purchase_id]);
@@ -29,7 +29,7 @@ if (!$purchase) {
 
 // Fetch purchase items with product details
 $stmt = $pdo->prepare("
-    SELECT pi.*, p.name AS product_name, p.unit AS product_unit, c.name AS category_name
+    SELECT pi.*, p.product_name, p.product_unit, c.category AS category_name
     FROM purchase_items pi
     LEFT JOIN products p ON pi.product_id = p.id
     LEFT JOIN categories c ON p.category_id = c.id
@@ -69,7 +69,7 @@ function safe_get_setting($key, $default = '') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Purchase Invoice - <?= htmlspecialchars($purchase['invoice_no']) ?></title>
+    <title>Purchase Invoice - <?= htmlspecialchars($purchase['purchase_no']) ?></title>
     <style>
         * {
             box-sizing: border-box;
@@ -242,7 +242,7 @@ function safe_get_setting($key, $default = '') {
         </div>
         <div class="invoice-info">
             <div class="section-title">📄 Invoice Details</div>
-            <strong>Invoice No:</strong> <?= htmlspecialchars($purchase['invoice_no'] ?? 'N/A') ?><br>
+                            <strong>Purchase No:</strong> <?= htmlspecialchars($purchase['purchase_no'] ?? 'N/A') ?><br>
             <strong>Date:</strong> <?= safe_format_date($purchase['purchase_date']) ?><br>
             <strong>Created By:</strong> <?= htmlspecialchars($purchase['created_by_name'] ?? 'N/A') ?><br>
             <strong>Total Amount:</strong> <?= safe_format_currency($purchase['total_amount'] ?? 0) ?>
@@ -254,11 +254,12 @@ function safe_get_setting($key, $default = '') {
         <thead>
             <tr>
                 <th width="5%">#</th>
-                <th width="25%">Product Name</th>
+                <th width="20%">Product Name</th>
                 <th width="15%">Category</th>
-                <th width="10%">Unit</th>
+                <th width="10%">Color</th>
+                <th width="8%">Unit</th>
                 <th width="10%">Quantity</th>
-                <th width="15%">Unit Price</th>
+                <th width="12%">Unit Price</th>
                 <th width="20%">Total</th>
             </tr>
         </thead>
@@ -267,20 +268,26 @@ function safe_get_setting($key, $default = '') {
             $counter = 1;
             $grand_total = 0;
             foreach ($purchase_items as $item): 
-                $grand_total += $item['total_price'];
+                $grand_total += $item['purchase_total'];
             ?>
                 <tr>
                     <td><?= $counter++ ?></td>
                     <td><?= htmlspecialchars($item['product_name'] ?? 'N/A') ?></td>
                     <td><?= htmlspecialchars($item['category_name'] ?? 'N/A') ?></td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <div style="width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 3px; background-color: <?= htmlspecialchars($item['color'] ?? '#000000') ?>;"></div>
+                            <span style="font-size: 12px;"><?= htmlspecialchars($item['color'] ?? '#000000') ?></span>
+                        </div>
+                    </td>
                     <td><?= htmlspecialchars($item['product_unit'] ?? 'N/A') ?></td>
                     <td><?= number_format($item['quantity'] ?? 0, 2) ?></td>
-                    <td><?= safe_format_currency($item['unit_price'] ?? 0) ?></td>
-                    <td><?= safe_format_currency($item['total_price'] ?? 0) ?></td>
+                    <td><?= safe_format_currency($item['purchase_price'] ?? 0) ?></td>
+                    <td><?= safe_format_currency($item['purchase_total'] ?? 0) ?></td>
                 </tr>
             <?php endforeach; ?>
             <tr class="total-row">
-                <td colspan="6" style="text-align: right;"><strong>Grand Total:</strong></td>
+                <td colspan="7" style="text-align: right;"><strong>Grand Total:</strong></td>
                 <td><strong><?= safe_format_currency($grand_total) ?></strong></td>
             </tr>
         </tbody>

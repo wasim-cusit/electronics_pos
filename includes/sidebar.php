@@ -34,6 +34,7 @@ if (is_logged_in()) {
           <i class="bi bi-box-seam me-2"></i>Products
         </a>
       </li>
+     
       <li class="nav-item mb-2">
         <a class="nav-link<?= $activePage === 'categories' ? ' active' : '' ?>" href="<?= $base_url ?>categories.php">
           <i class="bi bi-tags me-2"></i>Categories
@@ -45,6 +46,11 @@ if (is_logged_in()) {
       <li class="nav-item mb-2">
         <a class="nav-link<?= $activePage === 'customers' ? ' active' : '' ?>" href="<?= $base_url ?>customers.php">
           <i class="bi bi-people me-2"></i>Customers
+        </a>
+      </li>
+       <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'stock' ? ' active' : '' ?>" href="<?= $base_url ?>stock.php">
+          <i class="bi bi-boxes me-2"></i>Stock Details
         </a>
       </li>
       <li class="nav-item mb-2">

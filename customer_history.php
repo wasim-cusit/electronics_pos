@@ -14,7 +14,7 @@ if (!$customer_id) {
 }
 
 // Fetch customer details
-$stmt = $pdo->prepare("SELECT * FROM customers WHERE id = ?");
+$stmt = $pdo->prepare("SELECT * FROM customer WHERE id = ?");
 $stmt->execute([$customer_id]);
 $customer = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -26,8 +26,8 @@ if (!$customer) {
 // Fetch customer's sales history
 $stmt = $pdo->prepare("
     SELECT s.*, u.username as created_by_name 
-    FROM sales s 
-    LEFT JOIN users u ON s.created_by = u.id 
+    FROM sale s 
+    LEFT JOIN system_users u ON s.created_by = u.id 
     WHERE s.customer_id = ? 
     ORDER BY s.sale_date DESC
 ");
@@ -48,9 +48,9 @@ foreach ($sales_history as $sale) {
 
 // Get recent sales with items
 $stmt = $pdo->prepare("
-    SELECT s.*, si.product_id, si.quantity, si.unit_price, si.total_price,
-           p.name as product_name, p.unit as product_unit
-    FROM sales s
+    SELECT s.sale_no, s.sale_date, si.product_id, si.quantity, si.price as unit_price, si.total_price,
+           p.product_name, p.product_unit
+    FROM sale s
     JOIN sale_items si ON s.id = si.sale_id
     JOIN products p ON si.product_id = p.id
     WHERE s.customer_id = ?
@@ -175,7 +175,7 @@ include 'includes/header.php';
                                     <?php foreach ($sales_history as $sale): ?>
                                         <tr>
                                             <td>
-                                                <strong><?= htmlspecialchars($sale['invoice_no']) ?></strong>
+                                                <strong><?= htmlspecialchars($sale['sale_no']) ?></strong>
                                             </td>
                                             <td><?= date('d M Y', strtotime($sale['sale_date'])) ?></td>
                                             <td>
@@ -233,7 +233,7 @@ include 'includes/header.php';
                                         <td><?= date('d M Y', strtotime($item['sale_date'])) ?></td>
                                         <td>
                                             <a href="sale_details.php?id=<?= $item['id'] ?>" class="text-decoration-none">
-                                                <?= htmlspecialchars($item['invoice_no']) ?>
+                                                <?= htmlspecialchars($item['sale_no']) ?>
                                             </a>
                                         </td>
                                         <td><?= htmlspecialchars($item['product_name']) ?></td>

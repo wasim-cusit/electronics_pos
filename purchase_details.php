@@ -14,11 +14,11 @@ if (!$purchase_id) {
 
 // Fetch purchase details
 $stmt = $pdo->prepare("
-    SELECT p.*, s.name AS supplier_name, s.contact AS supplier_contact, s.address AS supplier_address, s.email AS supplier_email,
+    SELECT p.*, s.supplier_name, s.supplier_contact, s.supplier_address, s.supplier_email,
            u.username AS created_by_name
-    FROM purchases p 
-    LEFT JOIN suppliers s ON p.supplier_id = s.id 
-    LEFT JOIN users u ON p.created_by = u.id 
+    FROM purchase p 
+    LEFT JOIN supplier s ON p.supplier_id = s.id 
+    LEFT JOIN system_users u ON p.created_by = u.id 
     WHERE p.id = ?
 ");
 $stmt->execute([$purchase_id]);
@@ -31,7 +31,7 @@ if (!$purchase) {
 
 // Fetch purchase items with product details
 $stmt = $pdo->prepare("
-    SELECT pi.*, p.name AS product_name, p.unit AS product_unit, c.name AS category_name
+    SELECT pi.*, p.product_name, p.product_unit, c.category AS category_name
     FROM purchase_items pi
     LEFT JOIN products p ON pi.product_id = p.id
     LEFT JOIN categories c ON p.category_id = c.id
@@ -43,6 +43,12 @@ $purchase_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 include 'includes/header.php';
 ?>
+<style>
+.color-preview {
+    transition: background-color 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+</style>
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
@@ -69,8 +75,8 @@ include 'includes/header.php';
                         <div class="card-body">
                             <table class="table table-borderless">
                                 <tr>
-                                    <td><strong>Invoice No:</strong></td>
-                                    <td><?= htmlspecialchars($purchase['invoice_no']) ?></td>
+                                    <td><strong>Purchase No:</strong></td>
+                                    <td><?= htmlspecialchars($purchase['purchase_no']) ?></td>
                                 </tr>
                                 <tr>
                                     <td><strong>Purchase Date:</strong></td>
@@ -133,6 +139,7 @@ include 'includes/header.php';
                                 <th>#</th>
                                 <th>Product Name</th>
                                 <th>Category</th>
+                                <th>Color</th>
                                 <th>Unit</th>
                                 <th>Quantity</th>
                                 <th>Unit Price</th>
@@ -155,21 +162,27 @@ include 'includes/header.php';
                                             <?= htmlspecialchars($item['category_name'] ?? 'N/A') ?>
                                         </span>
                                     </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <span class="color-preview me-2" style="width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 3px; background-color: <?= htmlspecialchars($item['color'] ?? '#000000') ?>;" title="Color: <?= htmlspecialchars($item['color'] ?? '#000000') ?>"></span>
+                                            <small class="text-muted"><?= htmlspecialchars($item['color'] ?? '#000000') ?></small>
+                                        </div>
+                                    </td>
                                     <td><?= htmlspecialchars($item['product_unit']) ?></td>
                                     <td>
                                         <span class="badge bg-secondary">
                                             <?= number_format($item['quantity'], 2) ?> <?= htmlspecialchars($item['product_unit']) ?>
                                         </span>
                                     </td>
-                                    <td>PKR <?= number_format($item['unit_price'], 2) ?></td>
+                                    <td>PKR <?= number_format($item['purchase_price'], 2) ?></td>
                                     <td>
-                                        <strong>PKR <?= number_format($item['total_price'], 2) ?></strong>
+                                        <strong>PKR <?= number_format($item['purchase_total'], 2) ?></strong>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (empty($purchase_items)): ?>
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted">
+                                    <td colspan="8" class="text-center text-muted">
                                         <i class="bi bi-inbox"></i> No items found for this purchase.
                                     </td>
                                 </tr>
@@ -177,7 +190,7 @@ include 'includes/header.php';
                         </tbody>
                         <tfoot>
                             <tr class="table-info">
-                                <td colspan="4"><strong>Summary:</strong></td>
+                                <td colspan="5"><strong>Summary:</strong></td>
                                 <td><strong><?= number_format($total_items, 2) ?> total units</strong></td>
                                 <td><strong>Total:</strong></td>
                                 <td><strong>PKR <?= number_format($purchase['total_amount'], 2) ?></strong></td>

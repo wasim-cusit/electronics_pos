@@ -11,12 +11,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_category'])) {
     $description = trim($_POST['description'] ?? '');
     
     // Check if category name already exists
-    $stmt = $pdo->prepare("SELECT id FROM categories WHERE name = ?");
+    $stmt = $pdo->prepare("SELECT id FROM categories WHERE category = ?");
     $stmt->execute([$name]);
     if ($stmt->fetch()) {
         $error = "Category name already exists!";
     } else {
-        $stmt = $pdo->prepare("INSERT INTO categories (name, description) VALUES (?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO categories (category, description) VALUES (?, ?)");
         $stmt->execute([$name, $description]);
         header("Location: categories.php?success=added");
         exit;
@@ -30,12 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_category'])) {
     $description = trim($_POST['description'] ?? '');
     
     // Check if category name already exists (excluding current category)
-    $stmt = $pdo->prepare("SELECT id FROM categories WHERE name = ? AND id != ?");
+    $stmt = $pdo->prepare("SELECT id FROM categories WHERE category = ? AND id != ?");
     $stmt->execute([$name, $id]);
     if ($stmt->fetch()) {
         $error = "Category name already exists!";
     } else {
-        $stmt = $pdo->prepare("UPDATE categories SET name = ?, description = ? WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE categories SET category = ?, description = ? WHERE id = ?");
         $stmt->execute([$name, $description, $id]);
         header("Location: categories.php?success=updated");
         exit;
@@ -66,8 +66,8 @@ $categories = $pdo->query("
     SELECT c.*, COUNT(p.id) as product_count 
     FROM categories c 
     LEFT JOIN products p ON c.id = p.category_id 
-    GROUP BY c.id, c.name, c.description 
-    ORDER BY c.name
+    GROUP BY c.id, c.category, c.description 
+    ORDER BY c.category
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 // If editing, fetch category
@@ -151,7 +151,7 @@ include 'includes/header.php';
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Category Name</label>
                                 <input type="text" name="name" class="form-control" required 
-                                       value="<?= htmlspecialchars($edit_category['name'] ?? '') ?>"
+                                       value="<?= htmlspecialchars($edit_category['category'] ?? '') ?>"
                                        placeholder="e.g., Cotton Fabric, Silk, Denim">
                             </div>
                             <div class="col-md-6 mb-3">
@@ -194,7 +194,7 @@ include 'includes/header.php';
                                 <tr>
                                     <td><?= $category['id'] ?></td>
                                     <td>
-                                        <strong><?= htmlspecialchars($category['name']) ?></strong>
+                                        <strong><?= htmlspecialchars($category['category']) ?></strong>
                                     </td>
                                     <td><?= htmlspecialchars($category['description'] ?? '-') ?></td>
                                     <td>

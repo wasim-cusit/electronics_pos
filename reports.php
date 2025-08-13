@@ -17,7 +17,7 @@ foreach ($sales as $sale) {
 }
 
 // Purchases summary
-$purchases = $pdo->query("SELECT * FROM purchases")->fetchAll(PDO::FETCH_ASSOC);
+$purchases = $pdo->query("SELECT * FROM purchase")->fetchAll(PDO::FETCH_ASSOC);
 $total_purchases = 0;
 $today_purchases = 0;
 $month_purchases = 0;
@@ -38,8 +38,15 @@ foreach ($expenses as $expense) {
     if (date('Y-m', strtotime($expense['date'])) == date('Y-m')) $month_expenses += $expense['amount'];
 }
 
-// Low stock report
-$low_stock_products = $pdo->query("SELECT * FROM products WHERE stock_quantity <= low_stock_threshold ORDER BY stock_quantity ASC")->fetchAll(PDO::FETCH_ASSOC);
+// Low stock report - using stock_items table
+$low_stock_products = $pdo->query("
+    SELECT p.*, COALESCE(SUM(si.quantity), 0) as current_stock 
+    FROM products p 
+    LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' 
+    GROUP BY p.id 
+    HAVING current_stock <= p.alert_quantity 
+    ORDER BY current_stock ASC
+")->fetchAll(PDO::FETCH_ASSOC);
 
 // Get data for charts
 // Monthly sales data for the last 6 months
@@ -60,12 +67,12 @@ for ($i = 5; $i >= 0; $i--) {
 }
 
 // Category-wise product count
-$categories = $pdo->query("SELECT c.name, COUNT(p.id) as count FROM categories c LEFT JOIN products p ON c.id = p.category_id GROUP BY c.id, c.name")->fetchAll(PDO::FETCH_ASSOC);
+$categories = $pdo->query("SELECT c.category, COUNT(p.id) as count FROM categories c LEFT JOIN products p ON c.id = p.category_id GROUP BY c.id, c.category")->fetchAll(PDO::FETCH_ASSOC);
 
 // Top selling products (if you have sales_details table)
 $top_products = [];
 try {
-    $top_products = $pdo->query("SELECT p.name, SUM(sd.quantity) as total_sold FROM products p LEFT JOIN sales_details sd ON p.id = sd.product_id GROUP BY p.id, p.name ORDER BY total_sold DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+    $top_products = $pdo->query("SELECT p.product_name, SUM(sd.quantity) as total_sold FROM products p LEFT JOIN sale_items sd ON p.id = sd.product_id GROUP BY p.id, p.product_name ORDER BY total_sold DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
     // If sales_details table doesn't exist, use dummy data
     $top_products = [];
@@ -181,10 +188,10 @@ include 'includes/header.php';
                                 <tbody>
                                     <?php foreach ($low_stock_products as $product): ?>
                                         <tr>
-                                            <td><?= htmlspecialchars($product['name']) ?></td>
+                                            <td><?= htmlspecialchars($product['product_name']) ?></td>
                                             <td><?= htmlspecialchars($product['category_id']) ?></td>
-                                            <td><?= htmlspecialchars($product['unit']) ?></td>
-                                            <td><span class="badge bg-danger"><?= htmlspecialchars($product['stock_quantity']) ?></span></td>
+                                            <td><?= htmlspecialchars($product['product_unit']) ?></td>
+                                            <td><span class="badge bg-danger"><?= htmlspecialchars($product['current_stock']) ?></span></td>
                                         </tr>
                                     <?php endforeach; ?>
                                     <?php if (empty($low_stock_products)): ?>
@@ -296,7 +303,7 @@ const categoryCtx = document.getElementById('categoryChart').getContext('2d');
 new Chart(categoryCtx, {
     type: 'pie',
     data: {
-        labels: <?= json_encode(array_column($categories, 'name')) ?>,
+        labels: <?= json_encode(array_column($categories, 'category')) ?>,
         datasets: [{
             data: <?= json_encode(array_column($categories, 'count')) ?>,
             backgroundColor: [
@@ -382,7 +389,7 @@ new Chart(stockCtx, {
         labels: ['Low Stock (<5)', 'Normal Stock (≥5)'],
         datasets: [{
             label: 'Products',
-            data: [<?= count($low_stock_products) ?>, <?= $pdo->query("SELECT COUNT(*) FROM products WHERE stock_quantity >= 5")->fetchColumn() ?>],
+            data: [<?= count($low_stock_products) ?>, <?= $pdo->query("SELECT COUNT(*) FROM products")->fetchColumn() - count($low_stock_products) ?>],
             backgroundColor: [
                 'rgba(255, 99, 132, 0.8)',
                 'rgba(75, 192, 192, 0.8)'

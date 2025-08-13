@@ -13,11 +13,11 @@ if (!$sale_id) {
 
 // Fetch sale details
 $stmt = $pdo->prepare("
-    SELECT s.*, c.name AS customer_name, c.contact AS customer_contact, c.address AS customer_address, c.email AS customer_email,
+    SELECT s.*, COALESCE(c.name, s.walk_in_cust_name) AS customer_name, c.mobile AS customer_contact, c.address AS customer_address, c.email AS customer_email,
            u.username AS created_by_name
-    FROM sales s
-    LEFT JOIN customers c ON s.customer_id = c.id
-    LEFT JOIN users u ON s.created_by = u.id
+    FROM sale s
+    LEFT JOIN customer c ON s.customer_id = c.id
+    LEFT JOIN system_users u ON s.created_by = u.id
     WHERE s.id = ?
 ");
 $stmt->execute([$sale_id]);
@@ -30,7 +30,7 @@ if (!$sale) {
 
 // Fetch sale items with product details
 $stmt = $pdo->prepare("
-    SELECT si.*, p.name AS product_name, p.unit AS product_unit, cat.name AS category_name
+    SELECT si.*, p.product_name, p.product_unit, cat.name AS category_name
     FROM sale_items si
     LEFT JOIN products p ON si.product_id = p.id
     LEFT JOIN categories cat ON p.category_id = cat.id
@@ -62,7 +62,7 @@ include 'includes/header.php';
                     </div>
                     <div class="col-md-6 mb-3">
                         <h5>Invoice</h5>
-                        <strong>Invoice No:</strong> <?= htmlspecialchars($sale['invoice_no']) ?><br>
+                        <strong>Invoice No:</strong> <?= htmlspecialchars($sale['sale_no']) ?><br>
                         <strong>Sale Date:</strong> <?= htmlspecialchars($sale['sale_date']) ?><br>
                         <strong>Delivery Date:</strong> <?= htmlspecialchars($sale['delivery_date']) ?><br>
                         <strong>Created By:</strong> <?= htmlspecialchars($sale['created_by_name']) ?><br>

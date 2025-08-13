@@ -1,29 +1,33 @@
 <?php
 require_once 'includes/auth.php';
-require_once 'includes/flash.php';
-require_once 'includes/config.php';
 require_login();
+
+// Check if user has admin role
 if (!has_role('Admin')) {
-    set_flash('danger', 'Access denied.');
-    header('Location: ' . $base_url . 'users.php');
+    header('Location: dashboard.php');
     exit;
 }
-$id = intval($_GET['id'] ?? 0);
-if (!$id) {
-    set_flash('danger', 'Invalid user ID.');
-    header('Location: ' . $base_url . 'users.php');
-    exit;
-}
-if ($id == $_SESSION['user_id']) {
-    set_flash('danger', 'You cannot delete your own account.');
-    header('Location: ' . $base_url . 'users.php');
-    exit;
-}
-$stmt = $pdo->prepare('DELETE FROM users WHERE id = ?');
-if ($stmt->execute([$id])) {
-    set_flash('success', 'User deleted successfully.');
+
+if (isset($_GET['id'])) {
+    $id = intval($_GET['id']);
+    
+    // Don't allow admin to delete themselves
+    if ($id == $_SESSION['user_id']) {
+        header('Location: users.php?error=self_delete');
+        exit;
+    }
+    
+    require_once 'includes/config.php';
+    
+    try {
+        $stmt = $pdo->prepare('DELETE FROM system_users WHERE id = ?');
+        $stmt->execute([$id]);
+        
+        header('Location: users.php?success=deleted');
+    } catch (Exception $e) {
+        header('Location: users.php?error=delete_failed');
+    }
 } else {
-    set_flash('danger', 'Delete failed.');
+    header('Location: users.php');
 }
-header('Location: ' . $base_url . 'users.php');
 exit;
