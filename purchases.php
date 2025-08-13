@@ -16,85 +16,94 @@ function get_next_invoice_no($pdo) {
 // Handle Add Purchase
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
     $supplier_id = $_POST['supplier_id'];
-    $purchase_no = get_next_invoice_no($pdo);
+    $purchase_no = $_POST['purchase_no'];
     $purchase_date = $_POST['purchase_date'];
-    $subtotal = $_POST['subtotal'] ?? 0;
-    $discount = $_POST['discount'] ?? 0;
-    $tax_amount = $_POST['tax_amount'] ?? 0;
-    $total_amount = $_POST['total_amount'];
-    $paid_amount = $_POST['paid_amount'] ?? 0;
-    $due_amount = $total_amount - $paid_amount;
+    $subtotal = floatval($_POST['subtotal']);
+    $discount = floatval($_POST['discount'] ?? 0);
+    $total_amount = floatval($_POST['total_amount']);
+    $paid_amount = floatval($_POST['paid_amount'] ?? 0);
+    $due_amount = floatval($_POST['due_amount'] ?? 0);
     $payment_method_id = $_POST['payment_method_id'] ?? null;
     $notes = $_POST['notes'] ?? '';
     $created_by = $_SESSION['user_id'];
 
-    $stmt = $pdo->prepare("INSERT INTO purchase (supplier_id, purchase_no, purchase_date, subtotal, discount, tax_amount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$supplier_id, $purchase_no, $purchase_date, $subtotal, $discount, $tax_amount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
-    $purchase_id = $pdo->lastInsertId();
+    try {
+        $pdo->beginTransaction();
+        
+        $stmt = $pdo->prepare("INSERT INTO purchase (supplier_id, purchase_no, purchase_date, subtotal, discount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$supplier_id, $purchase_no, $purchase_date, $subtotal, $discount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
+        $purchase_id = $pdo->lastInsertId();
 
-    // Handle purchase items
-    $product_ids = $_POST['product_id'];
-    $colors = $_POST['color'] ?? [];
-    $quantities = $_POST['quantity'];
-    $unit_prices = $_POST['unit_price'];
-    $total_prices = $_POST['total_price'];
-    
-    // Debug: Log color data
-    error_log("Colors received: " . print_r($colors, true));
+        // Handle purchase items
+        $product_ids = $_POST['product_id'];
+        $colors = $_POST['color'] ?? [];
+        $quantities = $_POST['quantity'];
+        $unit_prices = $_POST['unit_price'];
+        $total_prices = $_POST['total_price'];
+        
+        // Debug: Log color data
+        error_log("Colors received: " . print_r($colors, true));
 
-    for ($i = 0; $i < count($product_ids); $i++) {
-        if (!empty($product_ids[$i])) {
-            // Get product details for product_code
-            $stmt = $pdo->prepare("SELECT product_name, product_code FROM products WHERE id = ?");
-            $stmt->execute([$product_ids[$i]]);
-            $product = $stmt->fetch(PDO::FETCH_ASSOC);
-            $product_code = $product ? $product['product_code'] : '';
-            
-            $color = $colors[$i] ?? '#000000';
-            
-            // Debug: Log color being inserted
-            error_log("Inserting color: $color for product_id: {$product_ids[$i]}");
-            
-            $stmt = $pdo->prepare("INSERT INTO purchase_items (purchase_id, product_id, product_code, color, purchase_price, sale_price, quantity, purchase_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$purchase_id, $product_ids[$i], $product_code, $color, $unit_prices[$i], $unit_prices[$i], $quantities[$i], $total_prices[$i]]);
-
-            // Add to stock_items table for inventory management
-            try {
-                error_log("Inserting into stock_items - Color: $color, Product ID: {$product_ids[$i]}");
-                $stmt = $pdo->prepare("INSERT INTO stock_items (product_id, purchase_item_id, product_code, color, quantity, purchase_price, sale_price, stock_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'available')");
-                $stmt->execute([$product_ids[$i], $purchase_id, $product_code, $color, $quantities[$i], $unit_prices[$i], $unit_prices[$i]]);
-            } catch (Exception $e) {
-                error_log("Stock items update failed: " . $e->getMessage());
-            }
-
-            // Check for low stock and create notification if needed
-            try {
-                $stmt = $pdo->prepare("SELECT p.product_name, p.alert_quantity, COALESCE(SUM(si.quantity), 0) as current_stock FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' WHERE p.id = ? GROUP BY p.id");
+        for ($i = 0; $i < count($product_ids); $i++) {
+            if (!empty($product_ids[$i])) {
+                // Get product details for product_code
+                $stmt = $pdo->prepare("SELECT product_name, product_code FROM products WHERE id = ?");
                 $stmt->execute([$product_ids[$i]]);
                 $product = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($product && $product['current_stock'] <= $product['alert_quantity']) {
-                    $msg = 'Low stock alert: ' . $product['product_name'] . ' stock is ' . $product['current_stock'] . ' (threshold: ' . $product['alert_quantity'] . ')';
-                    // Prevent duplicate unread notifications for this product and user
-                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'Low Stock' AND message = ? AND is_read = 0");
-                    $stmt->execute([$created_by, $msg]);
-                    $exists = $stmt->fetchColumn();
-                    if (!$exists) {
-                        $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message) VALUES (?, 'Low Stock', ?)");
-                        $stmt->execute([$created_by, $msg]);
-                    }
+                $product_code = $product ? $product['product_code'] : '';
+                
+                $color = $colors[$i] ?? '#000000';
+                
+                // Debug: Log color being inserted
+                error_log("Inserting color: $color for product_id: {$product_ids[$i]}");
+                
+                $stmt = $pdo->prepare("INSERT INTO purchase_items (purchase_id, product_id, product_code, color, purchase_price, sale_price, quantity, purchase_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$purchase_id, $product_ids[$i], $product_code, $color, $unit_prices[$i], $unit_prices[$i], $quantities[$i], $total_prices[$i]]);
+
+                // Add to stock_items table for inventory management
+                try {
+                    error_log("Inserting into stock_items - Color: $color, Product ID: {$product_ids[$i]}");
+                    $stmt = $pdo->prepare("INSERT INTO stock_items (product_id, purchase_item_id, product_code, color, quantity, purchase_price, sale_price, stock_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'available')");
+                    $stmt->execute([$product_ids[$i], $purchase_id, $product_code, $color, $quantities[$i], $unit_prices[$i], $unit_prices[$i]]);
+                } catch (Exception $e) {
+                    error_log("Stock items update failed: " . $e->getMessage());
                 }
-            } catch (Exception $e) {
-                // If any of these operations fail, skip notification
-                error_log("Low stock check failed: " . $e->getMessage());
+
+                // Check for low stock and create notification if needed
+                try {
+                    $stmt = $pdo->prepare("SELECT p.product_name, p.alert_quantity, COALESCE(SUM(si.quantity), 0) as current_stock FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' WHERE p.id = ? GROUP BY p.id");
+                    $stmt->execute([$product_ids[$i]]);
+                    $product = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if ($product && $product['current_stock'] <= $product['alert_quantity']) {
+                        $msg = 'Low stock alert: ' . $product['product_name'] . ' stock is ' . $product['current_stock'] . ' (threshold: ' . $product['alert_quantity'] . ')';
+                        // Prevent duplicate unread notifications for this product and user
+                        $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'Low Stock' AND message = ? AND is_read = 0");
+                        $stmt->execute([$created_by, $msg]);
+                        $exists = $stmt->fetchColumn();
+                        if (!$exists) {
+                            $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message) VALUES (?, 'Low Stock', ?)");
+                            $stmt->execute([$created_by, $msg]);
+                        }
+                    }
+                } catch (Exception $e) {
+                    // If any of these operations fail, skip notification
+                    error_log("Low stock check failed: " . $e->getMessage());
+                }
             }
         }
-    }
 
-    // Log successful purchase with colors
-    error_log("Purchase completed successfully with colors: " . implode(', ', array_filter($colors)));
-    
-    header("Location: purchases.php?success=added");
-    exit;
+        // Log successful purchase with colors
+        error_log("Purchase completed successfully with colors: " . implode(', ', array_filter($colors)));
+        
+        $pdo->commit();
+        header("Location: purchases.php?success=added");
+        exit;
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Purchase failed: " . $e->getMessage());
+        header("Location: purchases.php?error=purchase_failed");
+        exit;
+    }
 }
 
 // Handle Delete Purchase
@@ -257,10 +266,6 @@ include 'includes/header.php';
                                     <div class="col-md-2 mb-3">
                                         <label class="form-label">Discount</label>
                                         <input type="number" step="0.01" name="discount" id="discount" class="form-control" value="0.00" step="0.01">
-                                    </div>
-                                    <div class="col-md-2 mb-3">
-                                        <label class="form-label">Tax Amount</label>
-                                        <input type="number" step="0.01" name="tax_amount" id="tax_amount" class="form-control" value="0.00" step="0.01">
                                     </div>
                                     <div class="col-md-2 mb-3">
                                         <label class="form-label">Final Amount</label>
@@ -440,15 +445,13 @@ document.getElementById('addItem').addEventListener('click', function() {
 
 // Payment calculations
 document.getElementById('discount').addEventListener('input', calculateFinalAmount);
-document.getElementById('tax_amount').addEventListener('input', calculateFinalAmount);
 document.getElementById('paid_amount').addEventListener('input', calculateRemainingAmount);
 
 function calculateFinalAmount() {
     const subtotal = parseFloat(document.getElementById('subtotal').value) || 0;
     const discount = parseFloat(document.getElementById('discount').value) || 0;
-    const tax = parseFloat(document.getElementById('tax_amount').value) || 0;
     
-    const finalAmount = subtotal - discount + tax;
+    const finalAmount = subtotal - discount;
     document.getElementById('grandTotal').value = finalAmount.toFixed(2);
     
     // Recalculate remaining amount
@@ -504,7 +507,7 @@ function calculateGrandTotal() {
     document.getElementById('subtotal').value = grandTotal.toFixed(2);
     document.getElementById('grandTotal').value = grandTotal.toFixed(2);
     
-    // Recalculate final amount with discount and tax
+    // Recalculate final amount with discount
     calculateFinalAmount();
 }
 

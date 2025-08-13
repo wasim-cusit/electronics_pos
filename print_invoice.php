@@ -29,7 +29,7 @@ if (!$sale) {
 
 // Fetch sale items with product details
 $stmt = $pdo->prepare("
-    SELECT si.*, p.product_name, p.product_unit, cat.name AS category_name
+    SELECT si.*, p.product_name, p.product_unit, cat.category AS category_name, si.price AS unit_price
     FROM sale_items si
     LEFT JOIN products p ON si.product_id = p.id
     LEFT JOIN categories cat ON p.category_id = cat.id

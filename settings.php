@@ -31,7 +31,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
         set_setting('sale_prefix', $_POST['sale_prefix'], 'Sale Invoice Prefix');
         
         // Business Settings
-        set_setting('tax_rate', $_POST['tax_rate'], 'Default Tax Rate (%)');
         set_setting('footer_text', $_POST['footer_text'], 'Footer Text for Invoices');
         set_setting('print_header', $_POST['print_header'], 'Print Header Text');
         set_setting('low_stock_threshold', $_POST['low_stock_threshold'], 'Low Stock Alert Threshold');
@@ -173,19 +172,15 @@ include 'includes/header.php';
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">Tax Rate (%)</label>
-                                <input type="number" step="0.01" name="tax_rate" class="form-control" value="<?= htmlspecialchars(get_setting('tax_rate', '0')) ?>">
-                            </div>
-                            <div class="col-md-6 mb-3">
                                 <label class="form-label">Low Stock Threshold</label>
                                 <input type="number" name="low_stock_threshold" class="form-control" value="<?= htmlspecialchars(get_setting('low_stock_threshold', '10')) ?>">
                             </div>
-                        </div>
-                        <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Footer Text for Invoices</label>
                                 <textarea name="footer_text" class="form-control" rows="2"><?= htmlspecialchars(get_setting('footer_text', 'Thank you for your business!')) ?></textarea>
                             </div>
+                        </div>
+                        <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Print Header Text</label>
                                 <textarea name="print_header" class="form-control" rows="2"><?= htmlspecialchars(get_setting('print_header', 'Computer Generated Invoice')) ?></textarea>

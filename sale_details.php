@@ -11,6 +11,8 @@ if (!$sale_id) {
     exit;
 }
 
+
+
 // Fetch sale details
 $stmt = $pdo->prepare("
     SELECT s.*, COALESCE(c.name, s.walk_in_cust_name) AS customer_name, c.mobile AS customer_contact, c.address AS customer_address, c.email AS customer_email,
@@ -28,17 +30,42 @@ if (!$sale) {
     exit;
 }
 
+
+
 // Fetch sale items with product details
 $stmt = $pdo->prepare("
-    SELECT si.*, p.product_name, p.product_unit, cat.name AS category_name
+    SELECT 
+        si.id,
+        si.sale_id,
+        si.product_id,
+        si.warehouse_id,
+        si.product_code,
+        si.price,
+        si.stock_qty,
+        si.quantity,
+        si.total_price,
+        si.category_name,
+        si.notes,
+        p.product_name,
+        p.product_unit,
+        COALESCE(cat.category, si.category_name) AS category_name_final
     FROM sale_items si
     LEFT JOIN products p ON si.product_id = p.id
     LEFT JOIN categories cat ON p.category_id = cat.id
     WHERE si.sale_id = ?
     ORDER BY si.id
 ");
-$stmt->execute([$sale_id]);
-$sale_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+try {
+    $stmt->execute([$sale_id]);
+    $sale_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    error_log("Error fetching sale items: " . $e->getMessage());
+    $sale_items = [];
+}
+
+// Use the stored subtotal from the sale table for consistency
+$grand_total = $sale['subtotal'] ?? 0;
 
 include 'includes/header.php';
 ?>
@@ -46,65 +73,220 @@ include 'includes/header.php';
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
         <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
-            <div class="d-flex justify-content-end mb-3">
-                <a href="sales.php" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to Sales</a>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="mb-0"><i class="bi bi-receipt text-primary"></i> Sale Details</h2>
+                <div class="btn-group" role="group">
+                    <a href="sales.php" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Sales
+                    </a>
+                    <a href="print_invoice.php?id=<?= $sale_id ?>" target="_blank" class="btn btn-success">
+                        <i class="bi bi-printer"></i> Print Invoice
+                    </a>
+                </div>
             </div>
-            <h2 class="mb-4">Sale Details</h2>
+            
+            <!-- Sale Summary Information -->
             <div class="card mb-4">
-                <div class="card-header">Sale Information</div>
-                <div class="card-body row">
-                    <div class="col-md-6 mb-3">
-                        <h5>Customer</h5>
-                        <strong><?= htmlspecialchars($sale['customer_name']) ?></strong><br>
-                        Contact: <?= htmlspecialchars($sale['customer_contact']) ?><br>
-                        Address: <?= htmlspecialchars($sale['customer_address']) ?><br>
-                        Email: <?= htmlspecialchars($sale['customer_email']) ?>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <h5>Invoice</h5>
-                        <strong>Invoice No:</strong> <?= htmlspecialchars($sale['sale_no']) ?><br>
-                        <strong>Sale Date:</strong> <?= htmlspecialchars($sale['sale_date']) ?><br>
-                        <strong>Delivery Date:</strong> <?= htmlspecialchars($sale['delivery_date']) ?><br>
-                        <strong>Created By:</strong> <?= htmlspecialchars($sale['created_by_name']) ?><br>
-                        <strong>Total Amount:</strong> <?= htmlspecialchars($sale['total_amount']) ?>
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-receipt"></i> Sale Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <h6 class="text-primary border-bottom pb-2">Invoice Information</h6>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Invoice No:</strong></td>
+                                    <td><span class="badge bg-primary fs-6"><?= htmlspecialchars($sale['sale_no']) ?></span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Sale Date:</strong></td>
+                                    <td><i class="bi bi-calendar-event"></i> <?= date('d M Y', strtotime($sale['sale_date'])) ?></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Delivery Date:</strong></td>
+                                    <td>
+                                        <?php if ($sale['delivery_date']): ?>
+                                            <i class="bi bi-calendar-check text-success"></i> <?= date('d M Y', strtotime($sale['delivery_date'])) ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Created By:</strong></td>
+                                    <td><i class="bi bi-person-badge"></i> <?= htmlspecialchars($sale['created_by_name']) ?></td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6 class="text-primary border-bottom pb-2">Customer Information</h6>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Customer:</strong></td>
+                                    <td><i class="bi bi-person-circle"></i> <?= htmlspecialchars($sale['customer_name']) ?></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Contact:</strong></td>
+                                    <td>
+                                        <?php if ($sale['customer_contact']): ?>
+                                            <i class="bi bi-telephone"></i> <?= htmlspecialchars($sale['customer_contact']) ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Address:</strong></td>
+                                    <td>
+                                        <?php if ($sale['customer_address']): ?>
+                                            <i class="bi bi-geo-alt"></i> <?= htmlspecialchars($sale['customer_address']) ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Email:</strong></td>
+                                    <td>
+                                        <?php if ($sale['customer_email']): ?>
+                                            <i class="bi bi-envelope"></i> <?= htmlspecialchars($sale['customer_email']) ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
+
+                         <?php
+             // Calculate grand total from sale items
+             $grand_total = 0;
+             foreach ($sale_items as $item) {
+                 $grand_total += $item['total_price'];
+             }
+             ?>
+             
+             <!-- Financial Information -->
+             <div class="card mb-4">
+                 <div class="card-header bg-success text-white">
+                     <h5 class="mb-0"><i class="bi bi-calculator"></i> Financial Details</h5>
+                 </div>
+                 <div class="card-body">
+                     <div class="row">
+                         <div class="col-md-6 mb-3">
+                             <h6 class="text-success border-bottom pb-2">Pricing Summary</h6>
+                             <table class="table table-borderless">
+                                 
+                                 <tr>
+                                     <td><strong>Total Amount:</strong></td>
+                                     <td><span class="badge bg-info">PKR <?= number_format($grand_total, 2) ?></span></td>
+                                 </tr>
+                                 <tr>
+                                     <td><strong>Discount:</strong></td>
+                                     <td>
+                                         <?php if ($sale['discount'] > 0): ?>
+                                             <span class="badge bg-warning text-dark">PKR <?= number_format($sale['discount'], 2) ?></span>
+                                         <?php else: ?>
+                                             <span class="text-muted">-</span>
+                                         <?php endif; ?>
+                                     </td>
+                                 </tr>
+                                 <tr>
+                                     <td><strong>After Discount:</strong></td>
+                                     <td><span class="badge bg-secondary">PKR <?= number_format($grand_total - $sale['discount'], 2) ?></span></td>
+                                 </tr>
+                                 <tr>
+                                     <td><strong>Final Total:</strong></td>
+                                     <td><span class="badge bg-success fs-6"><strong>PKR <?= number_format($grand_total - $sale['discount'], 2) ?></strong></span></td>
+                                 </tr>
+                             </table>
+                         </div>
+                        <div class="col-md-6 mb-3">
+                            <h6 class="text-success border-bottom pb-2">Payment Information</h6>
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>Paid Amount:</strong></td>
+                                    <td><span class="badge bg-success">PKR <?= number_format($sale['paid_amount'], 2) ?></span></td>
+                                </tr>
+                                                                 <tr>
+                                     <td><strong>Due Amount:</strong></td>
+                                     <td>
+                                         <?php 
+                                         $final_total = $grand_total - $sale['discount'];
+                                         $due_amount = $final_total - $sale['paid_amount'];
+                                         if ($due_amount > 0): ?>
+                                             <span class="badge bg-danger">PKR <?= number_format($due_amount, 2) ?></span>
+                                         <?php else: ?>
+                                             <span class="badge bg-success">Paid</span>
+                                         <?php endif; ?>
+                                     </td>
+                                 </tr>
+                                <tr>
+                                    <td><strong>Payment Method:</strong></td>
+                                    <td>
+                                        <?php 
+                                        if ($sale['payment_method_id']) {
+                                            $stmt = $pdo->prepare("SELECT method FROM payment_method WHERE id = ?");
+                                            $stmt->execute([$sale['payment_method_id']]);
+                                            $method = $stmt->fetch(PDO::FETCH_ASSOC);
+                                            echo '<span class="badge bg-primary"><i class="bi bi-credit-card"></i> ' . htmlspecialchars($method['method'] ?? '') . '</span>';
+                                        } else {
+                                            echo '<span class="text-muted">-</span>';
+                                        }
+                                        ?>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Sale Items -->
             <div class="card">
-                <div class="card-header">Sale Items</div>
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Sale Items</h5>
+                </div>
                 <div class="card-body table-responsive">
-                    <table class="table table-bordered table-striped">
-                        <thead>
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead class="table-dark">
                             <tr>
-                                <th>#</th>
-                                <th>Product Name</th>
-                                <th>Category</th>
-                                <th>Unit</th>
-                                <th>Quantity</th>
-                                <th>Unit Price</th>
-                                <th>Total</th>
+                                <th><i class="bi bi-hash"></i> #</th>
+                                <th><i class="bi bi-box"></i> Product Name</th>
+                                <th><i class="bi bi-tags"></i> Category</th>
+                                <th><i class="bi bi-rulers"></i> Unit</th>
+                                <th><i class="bi bi-123"></i> Quantity</th>
+                                <th><i class="bi bi-currency-dollar"></i> Unit Price</th>
+                                <th><i class="bi bi-calculator"></i> Total</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php $counter = 1; $grand_total = 0; foreach ($sale_items as $item): $grand_total += $item['total_price']; ?>
+                            <?php $counter = 1; foreach ($sale_items as $item): ?>
                                 <tr>
-                                    <td><?= $counter++ ?></td>
-                                    <td><?= htmlspecialchars($item['product_name']) ?></td>
-                                    <td><?= htmlspecialchars($item['category_name']) ?></td>
+                                    <td><span class="badge bg-secondary"><?= $counter++ ?></span></td>
+                                    <td><strong><?= htmlspecialchars($item['product_name']) ?></strong></td>
+                                    <td><span class="badge bg-info"><?= htmlspecialchars($item['category_name_final']) ?></span></td>
                                     <td><?= htmlspecialchars($item['product_unit']) ?></td>
-                                    <td><?= number_format($item['quantity'], 2) ?></td>
-                                    <td><?= htmlspecialchars($item['unit_price']) ?></td>
-                                    <td><?= htmlspecialchars($item['total_price']) ?></td>
+                                    <td><span class="badge bg-warning text-dark"><?= number_format($item['quantity'], 2) ?></span></td>
+                                    <td><span class="badge bg-primary">PKR <?= number_format($item['price'], 2) ?></span></td>
+                                    <td><span class="badge bg-success"><strong>PKR <?= number_format($item['total_price'], 2) ?></strong></span></td>
                                 </tr>
                             <?php endforeach; ?>
                             <tr class="table-warning">
-                                <td colspan="6" class="text-end"><strong>Grand Total:</strong></td>
-                                <td><strong><?= htmlspecialchars($grand_total) ?></strong></td>
+                                <td colspan="6" class="text-end"><strong><i class="bi bi-calculator"></i> Grand Total:</strong></td>
+                                <td><strong><span class="badge bg-success fs-6">PKR <?= number_format($grand_total, 2) ?></span></strong></td>
                             </tr>
                         </tbody>
                     </table>
                     <?php if (empty($sale_items)): ?>
-                        <div class="text-center text-muted">No items found for this sale.</div>
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-cart-x fs-1"></i>
+                            <h5 class="mt-3">No items found for this sale.</h5>
+                            <p>This sale doesn't have any items associated with it.</p>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>

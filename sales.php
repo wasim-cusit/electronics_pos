@@ -19,92 +19,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
     $walk_in_cust_name = $_POST['walk_in_cust_name'];
     $invoice_no = get_next_sale_invoice_no($pdo);
     $sale_date = $_POST['sale_date'];
-    $delivery_date = $_POST['delivery_date'];
-    $subtotal = $_POST['subtotal'];
-    $discount = $_POST['discount'] ?? 0;
-    $tax_amount = $_POST['tax_amount'] ?? 0;
-    $total_amount = $_POST['total_amount'];
-    $paid_amount = $_POST['paid_amount'] ?? 0;
-    $due_amount = $_POST['due_amount'] ?? 0;
+    $delivery_date = !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null;
+    // Calculate subtotal from sale items
+    $subtotal = 0;
+    if (isset($_POST['total_price']) && is_array($_POST['total_price'])) {
+        foreach ($_POST['total_price'] as $total_price) {
+            if (!empty($total_price) && is_numeric($total_price)) {
+                $subtotal += floatval($total_price);
+            }
+        }
+    }
+    
+    $discount = floatval($_POST['discount'] ?? 0);
+    $total_amount = floatval($_POST['total_amount']);
+    $paid_amount = floatval($_POST['paid_amount'] ?? 0);
+    $due_amount = floatval($_POST['due_amount'] ?? 0);
     $payment_method_id = $_POST['payment_method_id'] ?? null;
     $notes = $_POST['notes'] ?? '';
-    $status = 'pending';
     $created_by = $_SESSION['user_id'];
 
     // If walk-in customer is selected, use walk_in_cust_name
     if ($customer_id === 'walk_in') {
-        $customer_id = null;
-    }
-
-    $after_discount = $subtotal - $discount;
-    $stmt = $pdo->prepare("INSERT INTO sale (customer_id, walk_in_cust_name, sale_no, sale_date, delivery_date, subtotal, discount, after_discount, tax_amount, total_amount, paid_amount, due_amount, payment_method_id, notes, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$customer_id, $walk_in_cust_name, $invoice_no, $sale_date, $delivery_date, $subtotal, $discount, $after_discount, $tax_amount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $status, $created_by]);
-    $sale_id = $pdo->lastInsertId();
-
-    // Handle sale items
-    $product_ids = $_POST['product_id'];
-    $quantities = $_POST['quantity'];
-    $purchase_prices = $_POST['purchase_price'];
-    $unit_prices = $_POST['unit_price'];
-    $total_prices = $_POST['total_price'];
-
-    for ($i = 0; $i < count($product_ids); $i++) {
-        if (!empty($product_ids[$i])) {
-            try {
-                // Get product details and stock item details
-                $stmt = $pdo->prepare("SELECT p.product_name, si.id as stock_item_id, si.product_code, si.purchase_price, si.sale_price 
-                                      FROM products p 
-                                      JOIN stock_items si ON p.id = si.product_id 
-                                      WHERE p.id = ? AND si.status = 'available' AND si.quantity >= ? 
-                                      ORDER BY si.id ASC LIMIT 1");
-                $stmt->execute([$product_ids[$i], $quantities[$i]]);
-                $stock_item = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($stock_item) {
-                    $product_code = $stock_item['product_code'] ?: '';
-                    $stock_item_id = $stock_item['stock_item_id'];
-                    
-                    // Get category name for the product
-                    $stmt = $pdo->prepare("SELECT c.category FROM products p JOIN categories c ON p.category_id = c.id WHERE p.id = ?");
-                    $stmt->execute([$product_ids[$i]]);
-                    $category = $stmt->fetch(PDO::FETCH_ASSOC);
-                    $category_name = $category ? $category['category'] : '';
-                    
-                    $stmt = $pdo->prepare("INSERT INTO sale_items (sale_id, product_id, warehouse_id, product_code, price, stock_qty, quantity, total_price, category_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([$sale_id, $product_ids[$i], 0, $product_code, $unit_prices[$i], $quantities[$i], $quantities[$i], $total_prices[$i], $category_name]);
-
-                    // Update stock - remove from stock_items using specific stock item ID
-                    $stmt = $pdo->prepare("UPDATE stock_items SET quantity = quantity - ? WHERE id = ?");
-                    $stmt->execute([$quantities[$i], $stock_item_id]);
-
-                    // Check for low stock and create notification if needed
-                    $stmt = $pdo->prepare("SELECT p.product_name, p.alert_quantity, COALESCE(SUM(si.quantity), 0) as current_stock FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' WHERE p.id = ? GROUP BY p.id");
-                    $stmt->execute([$product_ids[$i]]);
-                    $product = $stmt->fetch(PDO::FETCH_ASSOC);
-                    if ($product && $product['current_stock'] <= $product['alert_quantity']) {
-                        $msg = 'Low stock alert: ' . $product['product_name'] . ' stock is ' . $product['current_stock'] . ' (threshold: ' . $product['alert_quantity'] . ')';
-                        // Prevent duplicate unread notifications for this product and user
-                        $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'Low Stock' AND message = ? AND is_read = 0");
-                        $stmt->execute([$created_by, $msg]);
-                        $exists = $stmt->fetchColumn();
-                        if (!$exists) {
-                            $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message) VALUES (?, 'Low Stock', ?)");
-                            $stmt->execute([$created_by, $msg]);
-                        }
-                    }
-                } else {
-                    // Log error if no stock available
-                    error_log("No available stock found for product ID: " . $product_ids[$i] . " with quantity: " . $quantities[$i]);
-                }
-            } catch (Exception $e) {
-                // Log any database errors
-                error_log("Error processing sale item: " . $e->getMessage());
-            }
+        if (empty(trim($walk_in_cust_name))) {
+            $error = "Walk-in customer name is required when selecting walk-in customer.";
+        } else {
+            $customer_id = null; // Use null for walk-in customers (database now supports this)
         }
     }
 
-    header("Location: sales.php?success=added&sale_id=" . $sale_id);
-    exit;
+    // If no error, proceed with the sale
+    if (!isset($error)) {
+        $after_discount = $subtotal - $discount;
+        $stmt = $pdo->prepare("INSERT INTO sale (customer_id, walk_in_cust_name, sale_no, sale_date, delivery_date, subtotal, discount, after_discount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$customer_id, $walk_in_cust_name, $invoice_no, $sale_date, $delivery_date, $subtotal, $discount, $after_discount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
+        $sale_id = $pdo->lastInsertId();
+
+        // Handle sale items
+        $product_ids = $_POST['product_id'];
+        $quantities = $_POST['quantity'];
+        $purchase_prices = $_POST['purchase_price'];
+        $unit_prices = $_POST['unit_price'];
+        $total_prices = $_POST['total_price'];
+
+        for ($i = 0; $i < count($product_ids); $i++) {
+            if (!empty($product_ids[$i])) {
+                try {
+                    // Get product details and stock item details
+                    $stmt = $pdo->prepare("SELECT p.product_name, si.id as stock_item_id, si.product_code, si.purchase_price, si.sale_price 
+                                          FROM products p 
+                                          JOIN stock_items si ON p.id = si.product_id 
+                                          WHERE p.id = ? AND si.status = 'available' AND si.quantity >= ? 
+                                          ORDER BY si.id ASC LIMIT 1");
+                    $stmt->execute([$product_ids[$i], $quantities[$i]]);
+                    $stock_item = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($stock_item) {
+                        $product_code = $stock_item['product_code'] ?: '';
+                        $stock_item_id = $stock_item['stock_item_id'];
+                        
+                        // Get category name for the product
+                        $stmt = $pdo->prepare("SELECT c.category FROM products p JOIN categories c ON p.category_id = c.id WHERE p.id = ?");
+                        $stmt->execute([$product_ids[$i]]);
+                        $category = $stmt->fetch(PDO::FETCH_ASSOC);
+                        $category_name = $category ? $category['category'] : '';
+                        
+                        $stmt = $pdo->prepare("INSERT INTO sale_items (sale_id, product_id, warehouse_id, product_code, price, stock_qty, quantity, total_price, category_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $stmt->execute([$sale_id, $product_ids[$i], 0, $product_code, $unit_prices[$i], $quantities[$i], $quantities[$i], $total_prices[$i], $category_name]);
+
+                        // Update stock - remove from stock_items using specific stock item ID
+                        $stmt = $pdo->prepare("UPDATE stock_items SET quantity = quantity - ? WHERE id = ?");
+                        $stmt->execute([$quantities[$i], $stock_item_id]);
+
+                        // Check for low stock and create notification if needed
+                        $stmt = $pdo->prepare("SELECT p.product_name, p.alert_quantity, COALESCE(SUM(si.quantity), 0) as current_stock FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' WHERE p.id = ? GROUP BY p.id");
+                        $stmt->execute([$product_ids[$i]]);
+                        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+                        if ($product && $product['current_stock'] <= $product['alert_quantity']) {
+                            $msg = 'Low stock alert: ' . $product['product_name'] . ' stock is ' . $product['current_stock'] . ' (threshold: ' . $product['alert_quantity'] . ')';
+                            // Prevent duplicate unread notifications for this product and user
+                            $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'Low Stock' AND message = ? AND is_read = 0");
+                            $stmt->execute([$created_by, $msg]);
+                            $exists = $stmt->fetchColumn();
+                            if (!$exists) {
+                                $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message) VALUES (?, 'Low Stock', ?)");
+                                $stmt->execute([$created_by, $msg]);
+                            }
+                        }
+                    } else {
+                        // Log error if no stock available
+                        error_log("No available stock found for product ID: " . $product_ids[$i] . " with quantity: " . $quantities[$i]);
+                    }
+                } catch (Exception $e) {
+                    // Log any database errors
+                    error_log("Error processing sale item: " . $e->getMessage());
+                }
+            }
+        }
+
+        header("Location: sales.php?success=added&sale_id=" . $sale_id);
+        exit;
+    } else {
+        // If there was an error, redirect back to the form with error message
+        header("Location: sales.php?error=" . urlencode($error));
+        exit;
+    }
 }
 
 // Handle Delete Sale
@@ -156,6 +174,12 @@ include 'includes/header.php';
                 </div>
             <?php endif; ?>
 
+            <?php if (isset($_GET['error'])): ?>
+                <div class="alert alert-danger">
+                    <?= htmlspecialchars($_GET['error']) ?>
+                </div>
+            <?php endif; ?>
+
             <!-- Add Sale Form -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
@@ -180,16 +204,16 @@ include 'includes/header.php';
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="col-md-3 mb-3" id="walkInCustomerField" style="display: none;">
+                            <div class="mb-3" id="walkInCustomerField" style="display: none; width: 18%;">
                                 <label class="form-label fw-bold">Walk-in Customer Name <span class="text-danger">*</span></label>
-                                <input type="text" name="walk_in_cust_name" class="form-control" placeholder="Enter customer name">
+                                <input type="text" name="walk_in_cust_name" class="form-control" placeholder="Enter customer name" required>
                             </div>
-                            <div class="col-md-2 mb-3">
+                            <div class="mb-3" style="width: 14%;">
                                 <label class="form-label fw-bold">Sale Date <span class="text-danger">*</span></label>
                                 <input type="date" name="sale_date" class="form-control" required value="<?= date('Y-m-d') ?>">
                             </div>
-                            <div class="col-md-2 mb-3">
-                                <label class="form-label fw-bold">Delivery Date</label>
+                            <div class="mb-3" style="width: 16%;">
+                                <label class="form-label fw-bold">Delivery Date <small class="text-muted">(Optional)</small></label>
                                 <input type="date" name="delivery_date" class="form-control">
                             </div>
                             <div class="col-md-3 mb-3" style="margin-top: 30px;">
@@ -261,25 +285,12 @@ include 'includes/header.php';
                                     <i class="bi bi-calculator"></i> Pricing Summary
                                 </h6>
                             </div>
-                            <div class="col-md-2 mb-3">
-                                <label class="form-label fw-bold">Subtotal</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">PKR</span>
-                                    <input type="number" step="0.01" name="subtotal" id="subtotal" class="form-control" required readonly>
-                                </div>
-                            </div>
+
                             <div class="col-md-2 mb-3">
                                 <label class="form-label fw-bold">Discount</label>
                                 <div class="input-group">
                                     <span class="input-group-text">PKR</span>
                                     <input type="number" step="0.01" name="discount" id="discount" class="form-control" value="0.00" min="0">
-                                </div>
-                            </div>
-                            <div class="col-md-2 mb-3">
-                                <label class="form-label fw-bold">Tax Amount</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">PKR</span>
-                                    <input type="number" step="0.01" name="tax_amount" id="tax_amount" class="form-control" value="0.00" min="0">
                                 </div>
                             </div>
                             <div class="col-md-2 mb-3">
@@ -313,8 +324,8 @@ include 'includes/header.php';
                                 </div>
                             </div>
                             <div class="col-md-2 mb-3">
-                                <label class="form-label fw-bold">Payment Method</label>
-                                <select name="payment_method_id" id="paymentMethod" class="form-select">
+                                <label class="form-label fw-bold">Payment Method <span class="text-danger">*</span></label>
+                                <select name="payment_method_id" id="paymentMethod" class="form-select" required>
                                     <option value="">Select Method</option>
                                     <?php foreach ($payment_methods as $method): ?>
                                         <option value="<?= $method['id'] ?>">💳 <?= htmlspecialchars($method['method']) ?></option>
@@ -354,38 +365,48 @@ include 'includes/header.php';
                       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                      <div class="row">
-                        <div class="col-md-6 mb-3">
-                          <label class="form-label fw-bold">Full Name <span class="text-danger">*</span></label>
-                          <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-person"></i></span>
-                            <input type="text" name="name" class="form-control" placeholder="Enter customer full name" required>
-                          </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                          <label class="form-label fw-bold">Contact Number</label>
-                          <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-telephone"></i></span>
-                            <input type="text" name="contact" class="form-control" placeholder="Enter contact number">
-                          </div>
-                        </div>
-                      </div>
-                      <div class="row">
-                        <div class="col-md-6 mb-3">
-                          <label class="form-label fw-bold">Email Address</label>
-                          <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                            <input type="email" name="email" class="form-control" placeholder="Enter email address">
-                          </div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                          <label class="form-label fw-bold">Address</label>
-                          <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
-                            <input type="text" name="address" class="form-control" placeholder="Enter address">
-                          </div>
-                        </div>
-                      </div>
+                                             <div class="row">
+                         <div class="col-md-6 mb-3">
+                           <label class="form-label fw-bold">Full Name <span class="text-danger">*</span></label>
+                           <div class="input-group">
+                             <span class="input-group-text"><i class="bi bi-person"></i></span>
+                             <input type="text" name="name" class="form-control" placeholder="Enter customer full name" required>
+                           </div>
+                         </div>
+                         <div class="col-md-6 mb-3">
+                           <label class="form-label fw-bold">Contact Number</label>
+                           <div class="input-group">
+                             <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                             <input type="text" name="contact" class="form-control" placeholder="Enter contact number">
+                           </div>
+                         </div>
+                       </div>
+                       <div class="row">
+                         <div class="col-md-6 mb-3">
+                           <label class="form-label fw-bold">Email Address</label>
+                           <div class="input-group">
+                             <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                             <input type="email" name="email" class="form-control" placeholder="Enter email address">
+                           </div>
+                         </div>
+                         <div class="col-md-6 mb-3">
+                           <label class="form-label fw-bold">Address</label>
+                           <div class="input-group">
+                             <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                             <input type="text" name="address" class="form-control" placeholder="Enter address">
+                           </div>
+                         </div>
+                       </div>
+                       <div class="row">
+                         <div class="col-md-6 mb-3">
+                           <label class="form-label fw-bold">Opening Balance</label>
+                           <div class="input-group">
+                           <span class="input-group-text">₨</span>
+                             <input type="number" step="0.01" name="opening_balance" class="form-control" placeholder="0.00" value="0.00" min="0">
+                           </div>
+                           <small class="text-muted">Enter any existing balance the customer owes or credit they have</small>
+                         </div>
+                       </div>
                       <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i>
                         <strong>Note:</strong> Only the customer name is required. Other fields are optional and can be filled later.
@@ -416,16 +437,13 @@ include 'includes/header.php';
                                 <th><i class="bi bi-receipt"></i> Invoice No</th>
                                 <th><i class="bi bi-person"></i> Customer</th>
                                 <th><i class="bi bi-calendar-event"></i> Sale Date</th>
-                                <th><i class="bi bi-calendar-check"></i> Delivery Date</th>
-                                <th><i class="bi bi-calculator"></i> Subtotal</th>
-                                <th><i class="bi bi-percent"></i> Discount</th>
+                                                                 <th><i class="bi bi-calendar-check"></i> Delivery Date</th>
+                                 <th><i class="bi bi-percent"></i> Discount</th>
                                 <th><i class="bi bi-calculator"></i> After Discount</th>
-                                <th><i class="bi bi-percent"></i> Tax</th>
                                 <th><i class="bi bi-currency-dollar"></i> Total Amount</th>
                                 <th><i class="bi bi-cash"></i> Paid Amount</th>
                                 <th><i class="bi bi-exclamation-triangle"></i> Due Amount</th>
                                 <th><i class="bi bi-credit-card"></i> Payment Method</th>
-                                <th><i class="bi bi-info-circle"></i> Status</th>
                                 <th><i class="bi bi-person-badge"></i> Created By</th>
                                 <th><i class="bi bi-gear"></i> Actions</th>
                             </tr>
@@ -446,19 +464,14 @@ include 'includes/header.php';
                                         <i class="bi bi-calendar-event"></i> 
                                         <?= date('d M Y', strtotime($sale['sale_date'])) ?>
                                     </td>
-                                    <td>
-                                        <?php if ($sale['delivery_date']): ?>
-                                            <i class="bi bi-calendar-check text-success"></i> 
-                                            <?= date('d M Y', strtotime($sale['delivery_date'])) ?>
-                                        <?php else: ?>
-                                            <span class="text-muted">-</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info">
-                                            PKR <?= number_format($sale['subtotal'], 2) ?>
-                                        </span>
-                                    </td>
+                                                                         <td>
+                                         <?php if ($sale['delivery_date']): ?>
+                                             <i class="bi bi-calendar-check text-success"></i> 
+                                             <?= date('d M Y', strtotime($sale['delivery_date'])) ?>
+                                         <?php else: ?>
+                                             <span class="text-muted">-</span>
+                                         <?php endif; ?>
+                                     </td>
                                     <td>
                                         <?php if ($sale['discount'] > 0): ?>
                                             <span class="badge bg-warning text-dark">
@@ -472,15 +485,6 @@ include 'includes/header.php';
                                         <span class="badge bg-secondary">
                                             PKR <?= number_format($sale['after_discount'], 2) ?>
                                         </span>
-                                    </td>
-                                    <td>
-                                        <?php if ($sale['tax_amount'] > 0): ?>
-                                            <span class="badge bg-info text-dark">
-                                                PKR <?= number_format($sale['tax_amount'], 2) ?>
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="text-muted">-</span>
-                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <span class="badge bg-success fs-6">
@@ -514,38 +518,6 @@ include 'includes/header.php';
                                         ?>
                                     </td>
                                     <td>
-                                        <?php
-                                        $statusClass = 'bg-secondary';
-                                        $statusIcon = 'bi-question-circle';
-                                        switch($sale['status']) {
-                                            case 'completed':
-                                                $statusClass = 'bg-success';
-                                                $statusIcon = 'bi-check-circle';
-                                                break;
-                                            case 'pending':
-                                                $statusClass = 'bg-warning';
-                                                $statusIcon = 'bi-clock';
-                                                break;
-                                            case 'in_progress':
-                                                $statusClass = 'bg-info';
-                                                $statusIcon = 'bi-arrow-repeat';
-                                                break;
-                                            case 'delivered':
-                                                $statusClass = 'bg-primary';
-                                                $statusIcon = 'bi-truck';
-                                                break;
-                                            case 'cancelled':
-                                                $statusClass = 'bg-danger';
-                                                $statusIcon = 'bi-x-circle';
-                                                break;
-                                        }
-                                        ?>
-                                        <span class="badge <?= $statusClass ?>">
-                                            <i class="bi <?= $statusIcon ?>"></i> 
-                                            <?= ucfirst(str_replace('_', ' ', $sale['status'])) ?>
-                                        </span>
-                                    </td>
-                                    <td>
                                         <i class="bi bi-person-badge"></i> 
                                         <?= htmlspecialchars($sale['created_by_name']) ?>
                                     </td>
@@ -566,7 +538,7 @@ include 'includes/header.php';
                             <?php endforeach; ?>
                             <?php if (empty($sales)): ?>
                                 <tr>
-                                    <td colspan="15" class="text-center py-5">
+                                    <td colspan="13" class="text-center py-5">
                                         <div class="text-muted">
                                             <i class="bi bi-cart-x fs-1"></i>
                                             <h5 class="mt-3">No sales found</h5>
@@ -642,16 +614,16 @@ document.addEventListener('change', function(e) {
         const salePrice = parseFloat(option.dataset.salePrice) || 0;
         const purchasePriceValue = parseFloat(option.dataset.purchasePrice) || 0;
         
-        unitPrice.value = salePrice > 0 ? salePrice.toFixed(2) : '';
+        // Don't auto-fill sale price - leave it empty for user input
+        unitPrice.value = '';
         purchasePrice.value = purchasePriceValue > 0 ? purchasePriceValue.toFixed(2) : '';
         
-        // Trigger total calculation
-        const quantity = row.querySelector('.quantity');
-        if (quantity.value && unitPrice.value) {
-            const totalPrice = row.querySelector('.total-price');
-            totalPrice.value = (parseFloat(quantity.value) * parseFloat(unitPrice.value)).toFixed(2);
-            updateTotals();
-        }
+        // Clear total price since sale price is empty
+        const totalPrice = row.querySelector('.total-price');
+        totalPrice.value = '';
+        
+        // Update totals
+        updateTotals();
     }
 });
 
@@ -673,10 +645,32 @@ document.addEventListener('input', function(e) {
     }
 });
 
-// Handle discount and tax changes
+// Handle discount changes
 document.getElementById('discount').addEventListener('input', updateTotals);
-document.getElementById('tax_amount').addEventListener('input', updateTotals);
 document.getElementById('paidAmount').addEventListener('input', updateDueAmount);
+
+// Handle payment method validation
+document.getElementById('paymentMethod').addEventListener('change', function() {
+    if (this.value) {
+        this.classList.remove('is-invalid');
+    } else {
+        this.classList.add('is-invalid');
+    }
+});
+
+// Handle delivery date field - make it optional and allow clearing
+document.querySelector('input[name="delivery_date"]').addEventListener('change', function() {
+    // Allow empty delivery date - this field is optional
+    if (this.value === '') {
+        this.classList.remove('is-invalid');
+        this.classList.remove('is-valid');
+    } else {
+        this.classList.remove('is-invalid');
+        this.classList.add('is-valid');
+    }
+});
+
+
 
 // Format all numeric fields on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -698,10 +692,8 @@ function updateTotals() {
     });
     
     const discount = parseFloat(document.getElementById('discount').value) || 0;
-    const taxAmount = parseFloat(document.getElementById('tax_amount').value) || 0;
-    const totalAmount = subtotal - discount + taxAmount;
+    const totalAmount = subtotal - discount;
     
-    document.getElementById('subtotal').value = subtotal.toFixed(2);
     document.getElementById('totalAmount').value = totalAmount.toFixed(2);
     
     updateDueAmount();
@@ -749,9 +741,22 @@ document.getElementById('saleForm').addEventListener('submit', function(e) {
         }
     });
     
+    // Validate payment method is selected
+    const paymentMethod = document.getElementById('paymentMethod');
+    if (!paymentMethod.value) {
+        paymentMethod.classList.add('is-invalid');
+        isValid = false;
+    } else {
+        paymentMethod.classList.remove('is-invalid');
+    }
+    
     if (!isValid) {
         e.preventDefault();
-        alert('Please ensure all Sale Price fields have valid values greater than 0.');
+        if (!paymentMethod.value) {
+            alert('Please select a payment method.');
+        } else {
+            alert('Please ensure all Sale Price fields have valid values greater than 0.');
+        }
         return false;
     }
 });
@@ -836,16 +841,6 @@ document.getElementById('addCustomerForm').addEventListener('submit', function(e
 
 .btn-group .btn:last-child {
     margin-right: 0;
-}
-
-/* Status badge improvements */
-.badge {
-    font-size: 0.8rem;
-    padding: 0.5em 0.75em;
-}
-
-.badge.fs-6 {
-    font-size: 0.9rem !important;
 }
 
 /* Table improvements */

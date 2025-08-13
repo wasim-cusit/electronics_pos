@@ -16,7 +16,7 @@ try {
     $stock_value = $stmt->fetchColumn();
 
     // Upcoming deliveries (next 7 days)
-    $stmt = $pdo->prepare("SELECT COUNT(*) as upcoming_deliveries FROM sale WHERE delivery_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) AND status IN ('pending', 'in_progress')");
+    $stmt = $pdo->prepare("SELECT COUNT(*) as upcoming_deliveries FROM sale WHERE delivery_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)");
     $stmt->execute();
     $upcoming_deliveries = $stmt->fetchColumn();
 
