@@ -38,6 +38,34 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // Simple and safe chevron rotation
+    const sidebarToggles = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    sidebarToggles.forEach(toggle => {
+        toggle.addEventListener('click', function(e) {
+            // Prevent any text changes
+            e.preventDefault();
+            
+            const chevron = this.querySelector('.bi-chevron-right, .bi-chevron-down');
+            if (chevron) {
+                // Only rotate the icon, don't change classes
+                if (chevron.classList.contains('bi-chevron-right')) {
+                    chevron.style.transform = 'rotate(90deg)';
+                } else {
+                    chevron.style.transform = 'rotate(0deg)';
+                }
+            }
+        });
+    });
+    
+    // Initialize chevron states for already expanded sections
+    const expandedToggles = document.querySelectorAll('[aria-expanded="true"]');
+    expandedToggles.forEach(toggle => {
+        const chevron = toggle.querySelector('.bi-chevron-right');
+        if (chevron) {
+            chevron.style.transform = 'rotate(90deg)';
+        }
+    });
 });
 </script>
 </body>

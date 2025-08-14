@@ -20,19 +20,64 @@ if (is_logged_in()) {
         </a>
       </li>
       <li class="nav-item mb-2">
-        <a class="nav-link<?= $activePage === 'purchases' ? ' active' : '' ?>" href="<?= $base_url ?>purchases.php">
+        <a class="nav-link<?= $activePage === 'purchases' || $activePage === 'purchase_details' || $activePage === 'add_purchase' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#purchasesSubmenu" aria-expanded="<?= $activePage === 'purchases' || $activePage === 'purchase_details' || $activePage === 'add_purchase' ? 'true' : 'false' ?>" aria-controls="purchasesSubmenu">
           <i class="bi bi-cart-plus me-2"></i>Purchases
+          <i class="bi bi-chevron-right ms-auto"></i>
         </a>
+        <div class="collapse<?= $activePage === 'purchases' || $activePage === 'purchase_details' || $activePage === 'add_purchase' ? ' show' : '' ?>" id="purchasesSubmenu">
+          <ul class="nav flex-column ms-3">
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'add_purchase' ? ' active' : '' ?>" href="<?= $base_url ?>add_purchase.php">
+                <i class="bi bi-plus-circle me-2"></i>Add Purchase
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'purchases' ? ' active' : '' ?>" href="<?= $base_url ?>purchases.php">
+                <i class="bi bi-list-ul me-2"></i>Purchase Details
+              </a>
+            </li>
+          </ul>
+        </div>
       </li>
       <li class="nav-item mb-2">
-        <a class="nav-link<?= $activePage === 'sales' ? ' active' : '' ?>" href="<?= $base_url ?>sales.php">
+        <a class="nav-link<?= $activePage === 'sales' || $activePage === 'add_sale' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#salesSubmenu" aria-expanded="<?= $activePage === 'sales' || $activePage === 'add_sale' ? 'true' : 'false' ?>" aria-controls="salesSubmenu">
           <i class="bi bi-cash-coin me-2"></i>Sales
+          <i class="bi bi-chevron-right ms-auto"></i>
         </a>
+        <div class="collapse<?= $activePage === 'sales' || $activePage === 'add_sale' ? ' show' : '' ?>" id="salesSubmenu">
+          <ul class="nav flex-column ms-3">
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'add_sale' ? ' active' : '' ?>" href="<?= $base_url ?>add_sale.php">
+                <i class="bi bi-cart-plus me-2"></i>Add Sale
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'sales' ? ' active' : '' ?>" href="<?= $base_url ?>sales.php">
+                <i class="bi bi-list-ul me-2"></i>Sales Details
+              </a>
+            </li>
+          </ul>
+        </div>
       </li>
       <li class="nav-item mb-2">
-        <a class="nav-link<?= $activePage === 'products' ? ' active' : '' ?>" href="<?= $base_url ?>products.php">
+        <a class="nav-link<?= $activePage === 'products' || $activePage === 'add_product' || $activePage === 'product_details' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#productsSubmenu" aria-expanded="<?= $activePage === 'products' || $activePage === 'add_product' || $activePage === 'product_details' ? 'true' : 'false' ?>" aria-controls="productsSubmenu">
           <i class="bi bi-box-seam me-2"></i>Products
+          <i class="bi bi-chevron-right ms-auto"></i>
         </a>
+        <div class="collapse<?= $activePage === 'products' || $activePage === 'add_product' || $activePage === 'product_details' ? ' show' : '' ?>" id="productsSubmenu">
+          <ul class="nav flex-column ms-3">
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'add_product' ? ' active' : '' ?>" href="<?= $base_url ?>add_product.php">
+                <i class="bi bi-plus-circle me-2"></i>Add Products
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'products' ? ' active' : '' ?>" href="<?= $base_url ?>products.php">
+                <i class="bi bi-list-ul me-2"></i>Products Details
+              </a>
+            </li>
+          </ul>
+        </div>
       </li>
      
       <li class="nav-item mb-2">

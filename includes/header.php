@@ -115,6 +115,34 @@
         .sidebar::-webkit-scrollbar-thumb:hover {
             background: #e0a800;
         }
+        
+        /* Chevron icon styling and transitions */
+        .sidebar .bi-chevron-right {
+            transition: transform 0.3s ease;
+            font-size: 0.8em;
+        }
+        
+        /* Smooth collapse animation */
+        .collapse {
+            transition: all 0.3s ease;
+        }
+        
+        /* Submenu styling */
+        .sidebar .collapse .nav-link {
+            /* padding: 8px 20px 8px 40px; */
+            font-size: 0.9em;
+            border-left: 2px solid transparent;
+        }
+        
+        .sidebar .collapse .nav-link:hover {
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.1);
+        }
+        
+        .sidebar .collapse .nav-link.active {
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.2);
+        }
     </style>
 </head>
 <body>
