@@ -9,31 +9,14 @@ $activePage = 'expenses';
 // Handle Add Expense
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_expense'])) {
     $date = $_POST['date'];
-    $category = $_POST['category'] === 'Other' && !empty($_POST['other_category']) ? trim($_POST['other_category']) : $_POST['category'];
+    $category_id = $_POST['category'];
+    $expense_person = $_POST['expense_person'];
     $amount = $_POST['amount'];
-    $description = $_POST['description'];
-    $payment_method = $_POST['payment_method'];
-    $created_by = $_SESSION['user_id'];
+    $details = $_POST['description'];
+    $receipt = $_POST['receipt'] ?? '';
 
-    // Handle file upload
-    $attachment_path = null;
-    if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = 'uploads/expenses/';
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
-        }
-
-        $file_extension = pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION);
-        $file_name = uniqid() . '.' . $file_extension;
-        $upload_path = $upload_dir . $file_name;
-
-        if (move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_path)) {
-            $attachment_path = $upload_path;
-        }
-    }
-
-    $stmt = $pdo->prepare("INSERT INTO expenses (date, category, amount, description, payment_method, attachment_path, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$date, $category, $amount, $description, $payment_method, $attachment_path, $created_by]);
+    $stmt = $pdo->prepare("INSERT INTO expenses (exp_date, cat_id, expense_person, amount, details, receipt) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$date, $category_id, $expense_person, $amount, $details, $receipt]);
     header("Location: expenses.php?success=added");
     exit;
 }
@@ -42,34 +25,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_expense'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_expense'])) {
     $id = $_POST['id'];
     $date = $_POST['date'];
-    $category = $_POST['category'] === 'Other' && !empty($_POST['other_category']) ? trim($_POST['other_category']) : $_POST['category'];
+    $category_id = $_POST['category'];
+    $expense_person = $_POST['expense_person'];
     $amount = $_POST['amount'];
-    $description = $_POST['description'];
-    $payment_method = $_POST['payment_method'];
+    $details = $_POST['description'];
+    $receipt = $_POST['receipt'] ?? '';
 
-    // Handle file upload for edit
-    $attachment_path = $_POST['current_attachment'];
-    if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = 'uploads/expenses/';
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
-        }
-
-        $file_extension = pathinfo($_FILES['attachment']['name'], PATHINFO_EXTENSION);
-        $file_name = uniqid() . '.' . $file_extension;
-        $upload_path = $upload_dir . $file_name;
-
-        if (move_uploaded_file($_FILES['attachment']['tmp_name'], $upload_path)) {
-            // Delete old attachment if exists
-            if ($attachment_path && file_exists($attachment_path)) {
-                unlink($attachment_path);
-            }
-            $attachment_path = $upload_path;
-        }
-    }
-
-    $stmt = $pdo->prepare("UPDATE expenses SET date=?, category=?, amount=?, description=?, payment_method=?, attachment_path=? WHERE id=?");
-    $stmt->execute([$date, $category, $amount, $description, $payment_method, $attachment_path, $id]);
+    $stmt = $pdo->prepare("UPDATE expenses SET exp_date=?, cat_id=?, expense_person=?, amount=?, details=?, receipt=? WHERE id=?");
+    $stmt->execute([$date, $category_id, $expense_person, $amount, $details, $receipt, $id]);
     header("Location: expenses.php?success=updated");
     exit;
 }
@@ -77,24 +40,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_expense'])) {
 // Handle Delete Expense
 if (isset($_GET['delete'])) {
     $id = intval($_GET['delete']);
-
-    // Get attachment path to delete file
-    $stmt = $pdo->prepare("SELECT attachment_path FROM expenses WHERE id = ?");
-    $stmt->execute([$id]);
-    $expense = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($expense && $expense['attachment_path'] && file_exists($expense['attachment_path'])) {
-        unlink($expense['attachment_path']);
-    }
-
     $stmt = $pdo->prepare("DELETE FROM expenses WHERE id = ?");
     $stmt->execute([$id]);
     header("Location: expenses.php?success=deleted");
     exit;
 }
 
-// Fetch all expenses with user info
-$expenses = $pdo->query("SELECT e.*, u.username AS created_by_name FROM expenses e LEFT JOIN users u ON e.created_by = u.id ORDER BY e.date DESC")->fetchAll(PDO::FETCH_ASSOC);
+// Fetch all expenses with category info
+$expenses = $pdo->query("SELECT e.*, ec.expense_cat AS category_name FROM expenses e LEFT JOIN expenses_category ec ON e.cat_id = ec.id ORDER BY e.exp_date DESC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate totals
 $today_total = 0;
@@ -106,15 +59,15 @@ foreach ($expenses as $expense) {
     $total_expenses += $expense['amount'];
 
     // Category totals
-    if (!isset($category_totals[$expense['category']])) {
-        $category_totals[$expense['category']] = 0;
+    if (!isset($category_totals[$expense['category_name']])) {
+        $category_totals[$expense['category_name']] = 0;
     }
-    $category_totals[$expense['category']] += $expense['amount'];
+    $category_totals[$expense['category_name']] += $expense['amount'];
 
-    if ($expense['date'] == date('Y-m-d')) {
+    if ($expense['exp_date'] == date('Y-m-d')) {
         $today_total += $expense['amount'];
     }
-    if (date('Y-m', strtotime($expense['date'])) == date('Y-m')) {
+    if (date('Y-m', strtotime($expense['exp_date'])) == date('Y-m')) {
         $month_total += $expense['amount'];
     }
 }
@@ -127,6 +80,9 @@ if (isset($_GET['edit'])) {
     $stmt->execute([$id]);
     $edit_expense = $stmt->fetch(PDO::FETCH_ASSOC);
 }
+
+// Fetch expense categories for dropdown
+$expense_categories = $pdo->query("SELECT id, expense_cat FROM expenses_category WHERE status = 1 ORDER BY expense_cat")->fetchAll(PDO::FETCH_ASSOC);
 
 include 'includes/header.php';
 ?>
@@ -194,79 +150,33 @@ include 'includes/header.php';
                             <input type="hidden" name="current_attachment" value="<?= $edit_expense['attachment_path'] ?>">
                         <?php endif; ?>
 
-                        <div class="row">
-                            <div class="col-md-2  mb-3">
+                                                <div class="row">
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label">Date</label>
-                                <input type="date" name="date" class="form-control" required value="<?= $edit_expense ? $edit_expense['date'] : date('Y-m-d') ?>">
+                                <input type="date" name="date" class="form-control" required value="<?= $edit_expense ? $edit_expense['exp_date'] : date('Y-m-d') ?>">
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Category</label>
-                                <div class="d-flex">
-                                    <select name="category" class="form-control" id="categorySelect" required style="width: 60%;">
-                                        <option value="">Select Category</option>
-                                        <option value="Electricity" <?= ($edit_expense && $edit_expense['category'] == 'Electricity') ? 'selected' : '' ?>>Electricity Bill</option>
-                                        <option value="Water" <?= ($edit_expense && $edit_expense['category'] == 'Water') ? 'selected' : '' ?>>Water Bill</option>
-                                        <option value="Gas" <?= ($edit_expense && $edit_expense['category'] == 'Gas') ? 'selected' : '' ?>>Gas Bill</option>
-                                        <option value="Rent" <?= ($edit_expense && $edit_expense['category'] == 'Rent') ? 'selected' : '' ?>>Shop Rent</option>
-                                        <option value="Tea" <?= ($edit_expense && $edit_expense['category'] == 'Tea') ? 'selected' : '' ?>>Tea & Refreshments</option>
-                                        <option value="Cleaning" <?= ($edit_expense && $edit_expense['category'] == 'Cleaning') ? 'selected' : '' ?>>Cleaning Supplies</option>
-                                        <option value="Maintenance" <?= ($edit_expense && $edit_expense['category'] == 'Maintenance') ? 'selected' : '' ?>>Equipment Maintenance</option>
-                                        <option value="Transport" <?= ($edit_expense && $edit_expense['category'] == 'Transport') ? 'selected' : '' ?>>Transportation</option>
-                                        <option value="Internet" <?= ($edit_expense && $edit_expense['category'] == 'Internet') ? 'selected' : '' ?>>Internet/Phone</option>
-                                        <option value="Salary" <?= ($edit_expense && $edit_expense['category'] == 'Salary') ? 'selected' : '' ?>>Employee Salary</option>
-                                        <option value="Other" <?= (
-                                                                    $edit_expense && !in_array(
-                                                                        $edit_expense['category'],
-                                                                        [
-                                                                            'Electricity',
-                                                                            'Water',
-                                                                            'Gas',
-                                                                            'Rent',
-                                                                            'Tea',
-                                                                            'Cleaning',
-                                                                            'Maintenance',
-                                                                            'Transport',
-                                                                            'Internet',
-                                                                            'Salary',
-                                                                            'Other'
-                                                                        ]
-                                                                    )) ? 'selected' : ''
-                                                                ?>>Other Expenses</option>
-                                    </select>
-                                    <input type="text" name="other_category" id="otherCategoryInput" class="form-control ms-2" placeholder="Enter other category" style="display:none; width: 60%;" value="<?= ($edit_expense && !in_array($edit_expense['category'], ['Electricity', 'Water', 'Gas', 'Rent', 'Tea', 'Cleaning', 'Maintenance', 'Transport', 'Internet', 'Salary', 'Other'])) ? htmlspecialchars($edit_expense['category']) : '' ?>">
-                                </div>
-                                <script>
-                                    document.addEventListener('DOMContentLoaded', function() {
-                                        var categorySelect = document.getElementById('categorySelect');
-                                        var otherInput = document.getElementById('otherCategoryInput');
-
-                                        function toggleOtherInput() {
-                                            if (categorySelect.value === 'Other') {
-                                                otherInput.style.display = 'inline-block';
-                                                otherInput.required = true;
-                                            } else {
-                                                otherInput.style.display = 'none';
-                                                otherInput.required = false;
-                                            }
-                                        }
-                                        categorySelect.addEventListener('change', toggleOtherInput);
-                                        toggleOtherInput();
-                                    });
-                                </script>
+                                <select name="category" class="form-control" required>
+                                    <option value="">Select Category</option>
+                                    <?php foreach ($expense_categories as $cat): ?>
+                                        <option value="<?= $cat['id'] ?>" <?= ($edit_expense && $edit_expense['cat_id'] == $cat['id']) ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($cat['expense_cat']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
-                            <div class=" mb-3" style="width: 13%;">
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Expense Person</label>
+                                <input type="text" name="expense_person" class="form-control" required value="<?= $edit_expense ? htmlspecialchars($edit_expense['expense_person']) : '' ?>" placeholder="Who paid/received">
+                            </div>
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label">Amount</label>
                                 <input type="number" step="0.01" name="amount" class="form-control" required value="<?= $edit_expense ? $edit_expense['amount'] : '' ?>" placeholder="0.00">
                             </div>
-                            <div class=" mb-3" style="width: 13%;">
-                                <label class="form-label">Payment Method</label>
-                                <select name="payment_method" class="form-control" required>
-                                    <option value="">Select Method</option>
-                                    <option value="Cash" <?= ($edit_expense && $edit_expense['payment_method'] == 'Cash') ? 'selected' : '' ?>>Cash</option>
-                                    <option value="Bank Transfer" <?= ($edit_expense && $edit_expense['payment_method'] == 'Bank Transfer') ? 'selected' : '' ?>>Bank Transfer</option>
-                                    <option value="Card" <?= ($edit_expense && $edit_expense['payment_method'] == 'Card') ? 'selected' : '' ?>>Card Payment</option>
-                                    <option value="Mobile Money" <?= ($edit_expense && $edit_expense['payment_method'] == 'Mobile Money') ? 'selected' : '' ?>>Mobile Money</option>
-                                </select>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Receipt</label>
+                                <input type="text" name="receipt" class="form-control" value="<?= $edit_expense ? htmlspecialchars($edit_expense['receipt']) : '' ?>" placeholder="Receipt number">
                             </div>
                         </div>
                         <div class="row">
@@ -317,48 +227,38 @@ include 'includes/header.php';
                 <div class="card-body table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Category</th>
-                                <th>Description</th>
-                                <th>Amount</th>
-                                <th>Payment Method</th>
-                                <th>Created By</th>
-                                <th>Attachment</th>
-                                <th>Actions</th>
-                            </tr>
+                                                         <tr>
+                                 <th>Date</th>
+                                 <th>Category</th>
+                                 <th>Expense Person</th>
+                                 <th>Description</th>
+                                 <th>Amount</th>
+                                 <th>Receipt</th>
+                                 <th>Actions</th>
+                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($expenses as $expense): ?>
-                                <tr>
-                                    <td><?= format_date($expense['date']) ?></td>
-                                    <td>
-                                        <span class="badge bg-primary"><?= htmlspecialchars($expense['category']) ?></span>
-                                    </td>
-                                    <td><?= htmlspecialchars($expense['description']) ?></td>
-                                    <td class="fw-bold"><?= format_currency($expense['amount']) ?></td>
-                                    <td><?= htmlspecialchars($expense['payment_method']) ?></td>
-                                    <td><?= htmlspecialchars($expense['created_by_name']) ?></td>
-                                    <td>
-                                        <?php if ($expense['attachment_path']): ?>
-                                            <a href="<?= $expense['attachment_path'] ?>" target="_blank" class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-file-earmark"></i> View
-                                            </a>
-                                        <?php else: ?>
-                                            <span class="text-muted">No attachment</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <a href="expenses.php?edit=<?= $expense['id'] ?>" class="btn btn-sm btn-primary">Edit</a>
-                                        <a href="expenses.php?delete=<?= $expense['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete this expense?')">Delete</a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($expenses)): ?>
-                                <tr>
-                                    <td colspan="8" class="text-center">No expenses found.</td>
-                                </tr>
-                            <?php endif; ?>
+                                                         <?php foreach ($expenses as $expense): ?>
+                                 <tr>
+                                     <td><?= format_date($expense['exp_date']) ?></td>
+                                     <td>
+                                         <span class="badge bg-primary"><?= htmlspecialchars($expense['category_name']) ?></span>
+                                     </td>
+                                     <td><?= htmlspecialchars($expense['expense_person']) ?></td>
+                                     <td><?= htmlspecialchars($expense['details']) ?></td>
+                                     <td class="fw-bold"><?= format_currency($expense['amount']) ?></td>
+                                     <td><?= htmlspecialchars($expense['receipt']) ?: '<span class="text-muted">No receipt</span>' ?></td>
+                                     <td>
+                                         <a href="expenses.php?edit=<?= $expense['id'] ?>" class="btn btn-sm btn-primary">Edit</a>
+                                         <a href="expenses.php?delete=<?= $expense['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete this expense?')">Delete</a>
+                                     </td>
+                                 </tr>
+                             <?php endforeach; ?>
+                             <?php if (empty($expenses)): ?>
+                                 <tr>
+                                     <td colspan="7" class="text-center">No expenses found.</td>
+                                 </tr>
+                             <?php endif; ?>
                         </tbody>
                     </table>
                 </div>

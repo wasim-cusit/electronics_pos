@@ -291,35 +291,50 @@ include 'includes/header.php';
 
 <!-- Add Supplier Modal -->
 <div class="modal fade" id="addSupplierModal" tabindex="-1" aria-labelledby="addSupplierModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="addSupplierModalLabel">Add New Supplier</h5>
+                <h5 class="modal-title" id="addSupplierModalLabel">
+                    <i class="bi bi-plus-circle"></i> Add New Supplier
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="addSupplierForm">
-                    <div class="mb-3">
-                        <label for="supplierName" class="form-label">Supplier Name *</label>
-                        <input type="text" class="form-control" id="supplierName" name="supplier_name" required>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="supplierName" class="form-label">Supplier Name *</label>
+                            <input type="text" class="form-control" id="supplierName" name="supplier_name" required placeholder="Enter supplier name">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="supplierContact" class="form-label">Contact Number</label>
+                            <input type="text" class="form-control" id="supplierContact" name="supplier_contact" placeholder="Enter contact number">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="supplierContact" class="form-label">Contact Number</label>
-                        <input type="text" class="form-control" id="supplierContact" name="supplier_contact">
-                    </div>
-                    <div class="mb-3">
-                        <label for="supplierEmail" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="supplierEmail" name="supplier_email">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="supplierEmail" class="form-label">Email Address</label>
+                            <input type="email" class="form-control" id="supplierEmail" name="supplier_email" placeholder="Enter email address">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="supplierOpeningBalance" class="form-label">Opening Balance (Rs.)</label>
+                            <input type="number" class="form-control" id="supplierOpeningBalance" name="opening_balance" step="0.01" min="0" placeholder="0.00">
+                            <small class="text-muted">Enter the opening balance for this supplier</small>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="supplierAddress" class="form-label">Address</label>
-                        <textarea class="form-control" id="supplierAddress" name="supplier_address" rows="3"></textarea>
+                        <textarea class="form-control" id="supplierAddress" name="supplier_address" rows="3" placeholder="Enter supplier address"></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveSupplier()">Add Supplier</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveSupplier()">
+                    <i class="bi bi-check-circle"></i> Add Supplier
+                </button>
             </div>
         </div>
     </div>

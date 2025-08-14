@@ -51,7 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
 
 // Get current settings
 $company_info = get_company_info();
-$all_settings = get_all_settings();
 
 include 'includes/header.php';
 ?>
@@ -75,6 +74,8 @@ include 'includes/header.php';
                 </div>
             <?php endif; ?>
 
+
+
             <form method="post" id="settingsForm">
                 <!-- Company Information -->
                 <div class="card mb-4">
@@ -83,51 +84,46 @@ include 'includes/header.php';
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Company Name</label>
                                 <input type="text" name="company_name" class="form-control" value="<?= htmlspecialchars($company_info['name']) ?>" required>
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Company Tagline</label>
                                 <input type="text" name="company_tagline" class="form-control" value="<?= htmlspecialchars($company_info['tagline']) ?>">
                             </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Phone Number</label>
                                 <input type="text" name="company_phone" class="form-control" value="<?= htmlspecialchars($company_info['phone']) ?>">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Email Address</label>
                                 <input type="email" name="company_email" class="form-control" value="<?= htmlspecialchars($company_info['email']) ?>">
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Address</label>
-                                <textarea name="company_address" class="form-control" rows="3"><?= htmlspecialchars($company_info['address']) ?></textarea>
-                            </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Website</label>
                                 <input type="text" name="company_website" class="form-control" value="<?= htmlspecialchars($company_info['website']) ?>">
                             </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Business Hours</label>
                                 <input type="text" name="business_hours" class="form-control" value="<?= htmlspecialchars($company_info['business_hours']) ?>">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Business Days</label>
                                 <input type="text" name="business_days" class="form-control" value="<?= htmlspecialchars($company_info['business_days']) ?>">
                             </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-12 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label class="form-label">Company Logo URL (optional)</label>
                                 <input type="url" name="company_logo" class="form-control" value="<?= htmlspecialchars($company_info['logo']) ?>" placeholder="https://example.com/logo.png">
                             </div>
                         </div>
+                       
+                        <div class="col-md-4 mb-3">
+                                <label class="form-label">Address</label>
+                                <textarea name="company_address" class="form-control" rows="3"><?= htmlspecialchars($company_info['address']) ?></textarea>
+                            </div>
                     </div>
                 </div>
 
@@ -150,38 +146,40 @@ include 'includes/header.php';
                     </div>
                 </div>
 
-                <!-- Invoice Settings -->
+                <!-- Invoice & Print Settings -->
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h5 class="mb-0">Invoice Settings</h5>
+                        <h5 class="mb-0">
+                            <i class="bi bi-printer me-2"></i>
+                            Invoice & Print Settings
+                        </h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label">Invoice Prefix</label>
                                 <input type="text" name="invoice_prefix" class="form-control" value="<?= htmlspecialchars(get_setting('invoice_prefix', 'INV')) ?>" required>
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label">Purchase Invoice Prefix</label>
                                 <input type="text" name="purchase_prefix" class="form-control" value="<?= htmlspecialchars(get_setting('purchase_prefix', 'PUR')) ?>" required>
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label">Sale Invoice Prefix</label>
                                 <input type="text" name="sale_prefix" class="form-control" value="<?= htmlspecialchars(get_setting('sale_prefix', 'SALE')) ?>" required>
                             </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label">Low Stock Threshold</label>
                                 <input type="number" name="low_stock_threshold" class="form-control" value="<?= htmlspecialchars(get_setting('low_stock_threshold', '10')) ?>">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Footer Text for Invoices</label>
                                 <textarea name="footer_text" class="form-control" rows="2"><?= htmlspecialchars(get_setting('footer_text', 'Thank you for your business!')) ?></textarea>
                             </div>
                         </div>
+                       
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Print Header Text</label>
                                 <textarea name="print_header" class="form-control" rows="2"><?= htmlspecialchars(get_setting('print_header', 'Computer Generated Invoice')) ?></textarea>
                             </div>
@@ -222,26 +220,13 @@ include 'includes/header.php';
                     <button type="submit" class="btn btn-primary btn-lg" name="update_settings">
                         <i class="bi bi-save me-2"></i>Save Settings
                     </button>
+
                 </div>
             </form>
         </main>
     </div>
 </div>
 
-<script>
-// Preview functionality for date/time formats
-document.querySelectorAll('select[name="date_format"], select[name="time_format"]').forEach(select => {
-    select.addEventListener('change', function() {
-        const now = new Date();
-        const format = this.value;
-        const formatted = format.includes('Y') ? 
-            now.toLocaleDateString() : 
-            now.toLocaleTimeString();
-        
-        // You can add preview functionality here if needed
-        console.log('Format changed to:', format, 'Example:', formatted);
-    });
-});
-</script>
+
 
 <?php include 'includes/footer.php'; ?>

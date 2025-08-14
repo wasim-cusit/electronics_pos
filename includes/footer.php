@@ -39,20 +39,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Simple and safe chevron rotation
+    // Chevron rotation for sidebar toggles
     const sidebarToggles = document.querySelectorAll('[data-bs-toggle="collapse"]');
     sidebarToggles.forEach(toggle => {
         toggle.addEventListener('click', function(e) {
-            // Prevent any text changes
-            e.preventDefault();
-            
-            const chevron = this.querySelector('.bi-chevron-right, .bi-chevron-down');
+            const chevron = this.querySelector('.bi-chevron-right');
             if (chevron) {
-                // Only rotate the icon, don't change classes
-                if (chevron.classList.contains('bi-chevron-right')) {
-                    chevron.style.transform = 'rotate(90deg)';
-                } else {
+                // Toggle chevron rotation
+                if (chevron.style.transform === 'rotate(90deg)') {
                     chevron.style.transform = 'rotate(0deg)';
+                } else {
+                    chevron.style.transform = 'rotate(90deg)';
                 }
             }
         });
@@ -64,6 +61,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const chevron = toggle.querySelector('.bi-chevron-right');
         if (chevron) {
             chevron.style.transform = 'rotate(90deg)';
+        }
+    });
+    
+    // Listen for Bootstrap collapse events to update chevron rotation
+    document.addEventListener('show.bs.collapse', function(e) {
+        const toggle = e.target.previousElementSibling;
+        if (toggle && toggle.hasAttribute('data-bs-toggle')) {
+            const chevron = toggle.querySelector('.bi-chevron-right');
+            if (chevron) {
+                chevron.style.transform = 'rotate(90deg)';
+            }
+        }
+    });
+    
+    document.addEventListener('hide.bs.collapse', function(e) {
+        const toggle = e.target.previousElementSibling;
+        if (toggle && toggle.hasAttribute('data-bs-toggle')) {
+            const chevron = toggle.querySelector('.bi-chevron-right');
+            if (chevron) {
+                chevron.style.transform = 'rotate(0deg)';
+            }
         }
     });
 });

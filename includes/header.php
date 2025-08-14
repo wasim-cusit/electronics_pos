@@ -129,7 +129,7 @@
         
         /* Submenu styling */
         .sidebar .collapse .nav-link {
-            /* padding: 8px 20px 8px 40px; */
+            padding: 8px 20px 8px 40px;
             font-size: 0.9em;
             border-left: 2px solid transparent;
         }
@@ -142,6 +142,23 @@
         .sidebar .collapse .nav-link.active {
             border-left-color: #ffc107;
             background: rgba(255, 193, 7, 0.2);
+        }
+        
+        /* Ensure submenu items are properly indented */
+        .sidebar .collapse .nav {
+            margin-left: 0;
+        }
+        
+        /* Better spacing for submenu items */
+        .sidebar .collapse .nav-item {
+            margin-bottom: 2px;
+        }
+        
+        /* Active state for parent menu when submenu is active */
+        .sidebar .nav-link[aria-expanded="true"] {
+            background: #343a40;
+            color: #ffc107;
+            border-left-color: #ffc107;
         }
     </style>
 </head>
