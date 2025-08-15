@@ -261,10 +261,20 @@ include 'includes/header.php';
                                 <th><i class="bi bi-123"></i> Quantity</th>
                                 <th><i class="bi bi-currency-dollar"></i> Unit Price</th>
                                 <th><i class="bi bi-calculator"></i> Total</th>
+                                <th><i class="bi bi-check-circle"></i> Paid</th>
+                                <th><i class="bi bi-exclamation-circle"></i> Remaining</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php $counter = 1; foreach ($sale_items as $item): ?>
+                            <?php 
+                            $counter = 1; 
+                            $final_total = $grand_total - $sale['discount'];
+                            foreach ($sale_items as $item): 
+                                // Calculate proportional paid and remaining amounts for each item
+                                $item_proportion = $item['total_price'] / $grand_total;
+                                $item_paid = $item_proportion * $sale['paid_amount'];
+                                $item_remaining = $item['total_price'] - $item_paid;
+                            ?>
                                 <tr>
                                     <td><span class="badge bg-secondary"><?= $counter++ ?></span></td>
                                     <td><strong><?= htmlspecialchars($item['product_name']) ?></strong></td>
@@ -273,10 +283,18 @@ include 'includes/header.php';
                                     <td><span class="badge bg-warning text-dark"><?= number_format($item['quantity'], 2) ?></span></td>
                                     <td><span class="badge bg-primary">PKR <?= number_format($item['price'], 2) ?></span></td>
                                     <td><span class="badge bg-success"><strong>PKR <?= number_format($item['total_price'], 2) ?></strong></span></td>
+                                    <td><span class="badge bg-success">PKR <?= number_format($item_paid, 2) ?></span></td>
+                                    <td>
+                                        <?php if ($item_remaining > 0): ?>
+                                            <span class="badge bg-danger">PKR <?= number_format($item_remaining, 2) ?></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-success">Paid</span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                             <tr class="table-warning">
-                                <td colspan="6" class="text-end"><strong><i class="bi bi-calculator"></i> Grand Total:</strong></td>
+                                <td colspan="7" class="text-end"><strong><i class="bi bi-calculator"></i> Grand Total:</strong></td>
                                 <td><strong><span class="badge bg-success fs-6">PKR <?= number_format($grand_total, 2) ?></span></strong></td>
                             </tr>
                         </tbody>

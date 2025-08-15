@@ -34,12 +34,7 @@ $stock_items = $pdo->query($stock_query)->fetchAll(PDO::FETCH_ASSOC);
 
 include 'includes/header.php';
 ?>
-<style>
-.color-preview {
-    transition: background-color 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-</style>
+
 <?php
 ?>
 
@@ -169,10 +164,13 @@ include 'includes/header.php';
                                             </td>
                                                                     <td><code><?= htmlspecialchars($item['product_code']) ?></code></td>
                         <td>
-                            <div class="d-flex align-items-center">
-                                <span class="color-preview me-2" style="width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 3px; background-color: <?= htmlspecialchars($item['color'] ?? '#000000') ?>;" title="Color: <?= htmlspecialchars($item['color'] ?? '#000000') ?>"></span>
-                                <small class="text-muted"><?= htmlspecialchars($item['color'] ?? '#000000') ?></small>
-                            </div>
+                            <?php if (!empty($item['color'])): ?>
+                                <span class="badge bg-light text-dark border">
+                                    <?= htmlspecialchars($item['color']) ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="text-muted">No color specified</span>
+                            <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars($item['category']) ?></td>
                                             <td><?= htmlspecialchars($item['product_unit']) ?></td>

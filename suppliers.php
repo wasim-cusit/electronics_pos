@@ -42,15 +42,84 @@ include 'includes/header.php';
 
             <!-- Add Supplier Button -->
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="mb-0">Suppliers</h2>
+                <h2 class="mb-0">👥 Suppliers</h2>
                 <button type="button" class="btn btn-primary" onclick="openAddSupplierModal()">
                     <i class="bi bi-plus-circle"></i> Add Supplier
                 </button>
             </div>
 
+            <!-- Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-white bg-primary">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title">Total Suppliers</h6>
+                                    <h4 class="mb-0"><?= count($suppliers) ?></h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-people fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-danger">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title">You Owe</h6>
+                                    <h4 class="mb-0">Rs.<?= number_format(array_sum(array_map(function($s) { return max(0, $s['opening_balance'] ?? 0); }, $suppliers)), 2) ?></h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-arrow-up-circle fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-success">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title">You're Owed</h6>
+                                    <h4 class="mb-0">Rs.<?= number_format(abs(array_sum(array_map(function($s) { return min(0, $s['opening_balance'] ?? 0); }, $suppliers))), 2) ?></h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-arrow-down-circle fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-info">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title">Net Balance</h6>
+                                    <h4 class="mb-0">Rs.<?= number_format(array_sum(array_map(function($s) { return $s['opening_balance'] ?? 0; }, $suppliers)), 2) ?></h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-calculator fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Supplier List Table -->
             <div class="card">
-                <div class="card-header">Supplier List</div>
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-ul"></i> Supplier List
+                        <span class="badge bg-primary ms-2"><?= count($suppliers) ?> suppliers</span>
+                    </h5>
+                </div>
                 <div class="card-body table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead>
@@ -58,7 +127,7 @@ include 'includes/header.php';
                                 <th>Name</th>
                                 <th>Contact</th>
                                 <th>Email</th>
-                                <th>Opening Balance</th>
+                                <th>Opening Balance (Outstanding)</th>
                                 <th>Address</th>
                                 <th>Created Date</th>
                                 <th>Actions</th>
@@ -71,10 +140,21 @@ include 'includes/header.php';
                                     <td><?= htmlspecialchars($supplier['supplier_contact']) ?></td>
                                     <td><?= htmlspecialchars($supplier['supplier_email']) ?></td>
                                     <td>
-                                        <span class="badge <?= ($supplier['opening_balance'] ?? 0) > 0 ? 'bg-danger' : 'bg-success' ?>">
-                                            Rs.<?= number_format(abs($supplier['opening_balance'] ?? 0), 2) ?>
-                                            <?= ($supplier['opening_balance'] ?? 0) > 0 ? '(Owed)' : '(Credit)' ?>
-                                        </span>
+                                        <?php 
+                                        $balance = $supplier['opening_balance'] ?? 0;
+                                        if ($balance > 0): ?>
+                                            <span class="badge bg-danger">
+                                                Rs.<?= number_format($balance, 2) ?> (You Owe)
+                                            </span>
+                                        <?php elseif ($balance < 0): ?>
+                                            <span class="badge bg-success">
+                                                Rs.<?= number_format(abs($balance), 2) ?> (You're Owed)
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary">
+                                                Rs.0.00 (No Balance)
+                                            </span>
+                                        <?php endif; ?>
                                     </td>
                                     <td><?= htmlspecialchars($supplier['supplier_address']) ?></td>
                                     <td><?= htmlspecialchars($supplier['created_at']) ?></td>
@@ -124,8 +204,12 @@ include 'includes/header.php';
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="supplierOpeningBalance" class="form-label">Opening Balance (Rs.)</label>
-                            <input type="number" class="form-control" id="supplierOpeningBalance" name="opening_balance" step="0.01" min="0" placeholder="0.00">
-                            <small class="text-muted">Enter the opening balance for this supplier</small>
+                            <input type="number" class="form-control" id="supplierOpeningBalance" name="opening_balance" step="0.01" placeholder="0.00">
+                            <small class="text-muted">
+                                <strong>Positive value:</strong> You owe money to supplier (Red badge)<br>
+                                <strong>Negative value:</strong> Supplier owes you money (Green badge)<br>
+                                <strong>Zero:</strong> No outstanding balance
+                            </small>
                         </div>
                     </div>
                     <div class="mb-3">

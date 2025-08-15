@@ -43,12 +43,7 @@ $purchase_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 include 'includes/header.php';
 ?>
-<style>
-.color-preview {
-    transition: background-color 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-</style>
+
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
@@ -144,6 +139,8 @@ include 'includes/header.php';
                                 <th>Quantity</th>
                                 <th>Unit Price</th>
                                 <th>Total Price</th>
+                                <th>Paid</th>
+                                <th>Remaining</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -163,10 +160,13 @@ include 'includes/header.php';
                                         </span>
                                     </td>
                                     <td>
-                                        <div class="d-flex align-items-center">
-                                            <span class="color-preview me-2" style="width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 3px; background-color: <?= htmlspecialchars($item['color'] ?? '#000000') ?>;" title="Color: <?= htmlspecialchars($item['color'] ?? '#000000') ?>"></span>
-                                            <small class="text-muted"><?= htmlspecialchars($item['color'] ?? '#000000') ?></small>
-                                        </div>
+                                        <?php if (!empty($item['color'])): ?>
+                                            <span class="badge bg-light text-dark border">
+                                                <?= htmlspecialchars($item['color']) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-muted">No color specified</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td><?= htmlspecialchars($item['product_unit']) ?></td>
                                     <td>
@@ -178,11 +178,21 @@ include 'includes/header.php';
                                     <td>
                                         <strong>PKR <?= number_format($item['purchase_total'], 2) ?></strong>
                                     </td>
+                                    <td>
+                                        <span class="badge bg-success">
+                                            PKR <?= number_format($purchase['paid_amount'] ?? 0, 2) ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-warning">
+                                            PKR <?= number_format(($purchase['total_amount'] ?? 0) - ($purchase['paid_amount'] ?? 0), 2) ?>
+                                        </span>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (empty($purchase_items)): ?>
                                 <tr>
-                                    <td colspan="8" class="text-center text-muted">
+                                    <td colspan="10" class="text-center text-muted">
                                         <i class="bi bi-inbox"></i> No items found for this purchase.
                                     </td>
                                 </tr>
@@ -194,9 +204,44 @@ include 'includes/header.php';
                                 <td><strong><?= number_format($total_items, 2) ?> total units</strong></td>
                                 <td><strong>Total:</strong></td>
                                 <td><strong>PKR <?= number_format($purchase['total_amount'], 2) ?></strong></td>
+                                <td><strong>PKR <?= number_format($purchase['paid_amount'] ?? 0, 2) ?></strong></td>
+                                <td><strong>PKR <?= number_format(($purchase['total_amount'] ?? 0) - ($purchase['paid_amount'] ?? 0), 2) ?></strong></td>
                             </tr>
                         </tfoot>
                     </table>
+                </div>
+            </div>
+
+            <!-- Payment Summary -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">💰 Payment Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h4 class="text-danger">PKR <?= number_format($purchase['total_amount'], 2) ?></h4>
+                                        <p class="text-muted">Total Purchase Amount</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h4 class="text-success">PKR <?= number_format($purchase['paid_amount'] ?? 0, 2) ?></h4>
+                                        <p class="text-muted">Paid Amount</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <h4 class="text-warning">PKR <?= number_format(($purchase['total_amount'] ?? 0) - ($purchase['paid_amount'] ?? 0), 2) ?></h4>
+                                        <p class="text-muted">Remaining Balance</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

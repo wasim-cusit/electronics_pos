@@ -140,12 +140,30 @@ function safe_get_setting($key, $default = '') {
         }
         .total-row {
             font-weight: bold;
-            background-color: #f8f9fa;
-            font-size: 16px;
+            /* background: linear-gradient(135deg, #2c3e50, #34495e); */
+            color: black;
+            font-size: 14px;
         }
         .total-row td {
-            border-top: 2px solid #333;
+            border-top: 3px solid #e74c3c;
+            /* border-bottom: 3px solid #e74c3c; */
         }
+        .paid-column {
+            background-color: #d4edda;
+            color: #155724;
+            font-weight: bold;
+        }
+        .remaining-column {
+            background-color: #fff3cd;
+            color: #856404;
+            font-weight: bold;
+        }
+        .total-column {
+            background-color: #f8d7da;
+            color: #721c24;
+            font-weight: bold;
+        }
+
         .footer {
             margin-top: 40px;
             text-align: center;
@@ -242,10 +260,9 @@ function safe_get_setting($key, $default = '') {
         </div>
         <div class="invoice-info">
             <div class="section-title">📄 Invoice Details</div>
-                            <strong>Purchase No:</strong> <?= htmlspecialchars($purchase['purchase_no'] ?? 'N/A') ?><br>
+            <strong>Purchase No:</strong> <?= htmlspecialchars($purchase['purchase_no'] ?? 'N/A') ?><br>
             <strong>Date:</strong> <?= safe_format_date($purchase['purchase_date']) ?><br>
-            <strong>Created By:</strong> <?= htmlspecialchars($purchase['created_by_name'] ?? 'N/A') ?><br>
-            <strong>Total Amount:</strong> <?= safe_format_currency($purchase['total_amount'] ?? 0) ?>
+            <strong>Created By:</strong> <?= htmlspecialchars($purchase['created_by_name'] ?? 'N/A') ?>
         </div>
     </div>
 
@@ -260,7 +277,9 @@ function safe_get_setting($key, $default = '') {
                 <th width="8%">Unit</th>
                 <th width="10%">Quantity</th>
                 <th width="12%">Unit Price</th>
-                <th width="20%">Total</th>
+                <th width="10%">Total</th>
+                <th width="10%">Paid</th>
+                <th width="10%">Remaining</th>
             </tr>
         </thead>
         <tbody>
@@ -272,23 +291,30 @@ function safe_get_setting($key, $default = '') {
             ?>
                 <tr>
                     <td><?= $counter++ ?></td>
-                    <td><?= htmlspecialchars($item['product_name'] ?? 'N/A') ?></td>
-                    <td><?= htmlspecialchars($item['category_name'] ?? 'N/A') ?></td>
+                    <td><strong><?= htmlspecialchars($item['product_name'] ?? 'N/A') ?></strong></td>
+                    <td><span class="badge" style="background-color: #17a2b8; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px;"><?= htmlspecialchars($item['category_name'] ?? 'N/A') ?></span></td>
                     <td>
-                        <div style="display: flex; align-items: center; gap: 5px;">
-                            <div style="width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 3px; background-color: <?= htmlspecialchars($item['color'] ?? '#000000') ?>;"></div>
-                            <span style="font-size: 12px;"><?= htmlspecialchars($item['color'] ?? '#000000') ?></span>
-                        </div>
+                        <?php if (!empty($item['color'])): ?>
+                            <span style="background-color: #e9ecef; border: 1px solid #ced4da; padding: 3px 8px; border-radius: 15px; font-size: 11px; color: #495057; font-weight: 500;">
+                                <?= htmlspecialchars($item['color']) ?>
+                            </span>
+                        <?php else: ?>
+                            <span style="color: #6c757d; font-size: 11px; font-style: italic;">No color specified</span>
+                        <?php endif; ?>
                     </td>
-                    <td><?= htmlspecialchars($item['product_unit'] ?? 'N/A') ?></td>
-                    <td><?= number_format($item['quantity'] ?? 0, 2) ?></td>
+                    <td><code style="background-color: #f8f9fa; padding: 2px 6px; border-radius: 4px; font-size: 11px;"><?= htmlspecialchars($item['product_unit'] ?? 'N/A') ?></code></td>
+                    <td><span style="background-color: #007bff; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;"><?= number_format($item['quantity'] ?? 0, 2) ?></span></td>
                     <td><?= safe_format_currency($item['purchase_price'] ?? 0) ?></td>
-                    <td><?= safe_format_currency($item['purchase_total'] ?? 0) ?></td>
+                    <td class="total-column"><?= safe_format_currency($item['purchase_total'] ?? 0) ?></td>
+                    <td class="paid-column"><?= safe_format_currency($purchase['paid_amount'] ?? 0) ?></td>
+                    <td class="remaining-column"><?= safe_format_currency(($purchase['total_amount'] ?? 0) - ($purchase['paid_amount'] ?? 0)) ?></td>
                 </tr>
             <?php endforeach; ?>
             <tr class="total-row">
                 <td colspan="7" style="text-align: right;"><strong>Grand Total:</strong></td>
                 <td><strong><?= safe_format_currency($grand_total) ?></strong></td>
+                <td><strong><?= safe_format_currency($purchase['paid_amount'] ?? 0) ?></strong></td>
+                <td><strong><?= safe_format_currency(($purchase['total_amount'] ?? 0) - ($purchase['paid_amount'] ?? 0)) ?></strong></td>
             </tr>
         </tbody>
     </table>
@@ -298,6 +324,8 @@ function safe_get_setting($key, $default = '') {
         <p>This purchase invoice doesn't contain any items.</p>
     </div>
     <?php endif; ?>
+
+
 
     <div class="footer">
         <p><strong><?= htmlspecialchars(safe_get_setting('footer_text', 'Thank you for your business!')) ?></strong></p>

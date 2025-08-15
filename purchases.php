@@ -40,8 +40,49 @@ if (isset($_GET['delete'])) {
 // Fetch all purchases
 $purchases = $pdo->query("SELECT p.*, s.supplier_name, u.username AS created_by_name FROM purchase p LEFT JOIN supplier s ON p.supplier_id = s.id LEFT JOIN system_users u ON p.created_by = u.id ORDER BY p.id DESC")->fetchAll(PDO::FETCH_ASSOC);
 
-include 'includes/header.php';
-?>
+include 'includes/header.php'; ?>
+<style>
+    .table th {
+        font-weight: 600;
+        border-bottom: 2px solid #dee2e6;
+        background-color: #f8f9fa;
+    }
+    .table td {
+        vertical-align: middle;
+        padding: 12px 8px;
+    }
+    .btn-group .btn {
+        margin: 0 1px;
+        border-radius: 4px;
+    }
+    .badge {
+        font-size: 0.85em;
+        padding: 6px 10px;
+    }
+    .table-hover tbody tr:hover {
+        background-color: rgba(0,123,255,0.05);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
+    }
+    .card {
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+    }
+    .card-header {
+        border-radius: 8px 8px 0 0 !important;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .table {
+        margin-bottom: 0;
+    }
+    .text-end {
+        text-align: right !important;
+    }
+    .text-center {
+        text-align: center !important;
+    }
+</style>
 
 <div class="container-fluid">
     <div class="row">
@@ -66,45 +107,59 @@ include 'includes/header.php';
 
 
             <!-- Purchase List Table -->
-            <div class="card">
-                <div class="card-header">Purchase List</div>
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-cart-check me-2"></i>Purchase List</h5>
+                </div>
                 <div class="card-body table-responsive">
-                    <table class="table table-bordered table-striped">
-                        <thead>
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead class="table-light">
                             <tr>
-                                <th>Purchase No</th>
-                                <th>Supplier</th>
-                                <th>Purchase Date & Time</th>
-                                <th>Total Amount</th>
-                                <th>Paid Amount</th>
-                                <th>Remaining</th>
-                                <th>Payment Method</th>
-                                <th>Status</th>
-                                <th>Created By</th>
-                                <th>Actions</th>
+                                <th class="text-center"><i class="bi bi-hash me-1"></i>Purchase No</th>
+                                <th><i class="bi bi-person-badge me-1"></i>Supplier</th>
+                                <th><i class="bi bi-calendar-event me-1"></i>Purchase Date & Time</th>
+                                <th class="text-end"><i class="bi bi-currency-dollar me-1"></i>Total Amount</th>
+                                <th class="text-end"><i class="bi bi-check-circle me-1"></i>Paid Amount</th>
+                                <th class="text-end"><i class="bi bi-exclamation-circle me-1"></i>Remaining</th>
+                                <th><i class="bi bi-credit-card me-1"></i>Payment Method</th>
+                                <th><i class="bi bi-person me-1"></i>Created By</th>
+                                <th class="text-center"><i class="bi bi-gear me-1"></i>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($purchases as $purchase): ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($purchase['purchase_no']) ?></td>
-                                    <td><?= htmlspecialchars($purchase['supplier_name']) ?></td>
-                                    <td>
-                                        <small>
-                                            <?php if ($purchase['purchase_date']): ?>
-                                                <?= date('d M Y', strtotime($purchase['purchase_date'])) ?><br>
-                                                <span class="text-secondary"><?= date('H:i') ?></span>
-                                            <?php else: ?>
-                                                <span class="text-secondary">N/A</span>
-                                            <?php endif; ?>
-                                        </small>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary"><?= htmlspecialchars($purchase['purchase_no']) ?></span>
                                     </td>
-                                    <td>PKR <?= number_format($purchase['total_amount'], 2) ?></td>
-                                    <td>PKR <?= number_format($purchase['paid_amount'], 2) ?></td>
                                     <td>
-                                        <span class="badge <?= $purchase['due_amount'] > 0 ? 'bg-warning' : 'bg-success' ?>">
-                                            PKR <?= number_format($purchase['due_amount'], 2) ?>
-                                        </span>
+                                        <i class="bi bi-person-badge me-1"></i>
+                                        <?= htmlspecialchars($purchase['supplier_name']) ?>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-column">
+                                            <strong><?= date('d M Y', strtotime($purchase['purchase_date'])) ?></strong>
+                                            <small class="text-muted"><?= date('H:i', strtotime($purchase['purchase_date'])) ?></small>
+                                        </div>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="fw-bold text-primary">PKR <?= number_format($purchase['total_amount'], 2) ?></span>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="text-success">PKR <?= number_format($purchase['paid_amount'], 2) ?></span>
+                                    </td>
+                                    <td class="text-end">
+                                        <?php if ($purchase['due_amount'] > 0): ?>
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                                PKR <?= number_format($purchase['due_amount'], 2) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-circle me-1"></i>
+                                                PKR <?= number_format($purchase['due_amount'], 2) ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php 
@@ -112,27 +167,41 @@ include 'includes/header.php';
                                             $stmt = $pdo->prepare("SELECT method FROM payment_method WHERE id = ?");
                                             $stmt->execute([$purchase['payment_method_id']]);
                                             $method = $stmt->fetch(PDO::FETCH_ASSOC);
-                                            echo htmlspecialchars($method['method'] ?? 'N/A');
+                                            echo '<span class="badge bg-info">' . htmlspecialchars($method['method'] ?? 'N/A') . '</span>';
                                         } else {
-                                            echo 'N/A';
+                                            echo '<span class="text-muted">N/A</span>';
                                         }
                                         ?>
                                     </td>
                                     <td>
-                                        <span class="badge <?= $purchase['due_amount'] > 0 ? 'bg-warning' : 'bg-success' ?>">
-                                            <?= $purchase['due_amount'] > 0 ? 'Pending' : 'Paid' ?>
-                                        </span>
+                                        <i class="bi bi-person me-1"></i>
+                                        <?= htmlspecialchars($purchase['created_by_name']) ?>
                                     </td>
-                                    <td><?= htmlspecialchars($purchase['created_by_name']) ?></td>
-                                    <td>
-                                        <a href="purchase_details.php?id=<?= $purchase['id'] ?>" class="btn btn-sm btn-info">View</a>
-                                        <a href="print_purchase.php?id=<?= $purchase['id'] ?>" class="btn btn-sm btn-secondary" target="_blank">Print</a>
-                                        <a href="purchases.php?delete=<?= $purchase['id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete this purchase?')">Delete</a>
+                                    <td class="text-center">
+                                        <div class="btn-group" role="group">
+                                            <a href="purchase_details.php?id=<?= $purchase['id'] ?>" class="btn btn-sm btn-outline-info" title="View Details">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="print_purchase.php?id=<?= $purchase['id'] ?>" class="btn btn-sm btn-outline-secondary" target="_blank" title="Print">
+                                                <i class="bi bi-printer"></i>
+                                            </a>
+                                            <a href="purchases.php?delete=<?= $purchase['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this purchase?')" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                             <?php if (empty($purchases)): ?>
-                                <tr><td colspan="10" class="text-center">No purchases found.</td></tr>
+                                <tr>
+                                    <td colspan="9" class="text-center py-4">
+                                        <div class="text-muted">
+                                            <i class="bi bi-cart-x fs-1 d-block mb-2"></i>
+                                            <h5>No purchases found</h5>
+                                            <p>Start by adding your first purchase using the button above.</p>
+                                        </div>
+                                    </td>
+                                </tr>
                             <?php endif; ?>
                         </tbody>
                     </table>

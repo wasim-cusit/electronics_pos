@@ -144,6 +144,26 @@ function safe_get_setting($key, $default = '') {
         .total-row td {
             border-top: 2px solid #333;
         }
+        .paid-amount {
+            background-color: #d4edda;
+            color: #155724;
+            font-weight: bold;
+            text-align: center;
+        }
+        .remaining-amount {
+            background-color: #f8d7da;
+            color: #721c24;
+            font-weight: bold;
+            text-align: center;
+        }
+        .paid-header {
+            background-color: #d4edda !important;
+            /* color: #155724 !important; */
+        }
+        .remaining-header {
+            background-color: #f8d7da !important;
+            color: #721c24 !important;
+        }
         .footer {
             margin-top: 40px;
             text-align: center;
@@ -225,13 +245,15 @@ function safe_get_setting($key, $default = '') {
     <table>
         <thead>
             <tr>
-                <th width="5%">#</th>
-                <th width="25%">Product Name</th>
-                <th width="15%">Category</th>
-                <th width="10%">Unit</th>
-                <th width="10%">Quantity</th>
-                <th width="15%">Unit Price</th>
-                <th width="20%">Total</th>
+                <th width="4%">#</th>
+                <th width="20%">Product Name</th>
+                <th width="12%">Category</th>
+                <th width="8%">Unit</th>
+                <th width="8%">Quantity</th>
+                <th width="12%">Unit Price</th>
+                <th width="12%">Total</th>
+                <th width="12%" class="">Paid</th>
+                <th width="12%" class="">Remaining</th>
             </tr>
         </thead>
         <tbody>
@@ -240,6 +262,15 @@ function safe_get_setting($key, $default = '') {
             $grand_total = 0;
             foreach ($sale_items as $item): 
                 $grand_total += $item['total_price'];
+            endforeach;
+            
+            // Reset counter and calculate paid/remaining amounts
+            $counter = 1;
+            foreach ($sale_items as $item): 
+                // Calculate proportional paid and remaining amounts for each item
+                $item_proportion = $item['total_price'] / $grand_total;
+                $item_paid = $item_proportion * $sale['paid_amount'];
+                $item_remaining = $item['total_price'] - $item_paid;
             ?>
                 <tr>
                     <td><?= $counter++ ?></td>
@@ -249,10 +280,12 @@ function safe_get_setting($key, $default = '') {
                     <td><?= number_format($item['quantity'] ?? 0, 2) ?></td>
                     <td><?= safe_format_currency($item['unit_price'] ?? 0) ?></td>
                     <td><?= safe_format_currency($item['total_price'] ?? 0) ?></td>
+                    <td class="paid-amount"><?= safe_format_currency($item_paid) ?></td>
+                    <td class="remaining-amount"><?= safe_format_currency($item_remaining) ?></td>
                 </tr>
             <?php endforeach; ?>
             <tr class="total-row">
-                <td colspan="6" style="text-align: right;"><strong>Grand Total:</strong></td>
+                <td colspan="7" style="text-align: right;"><strong>Grand Total:</strong></td>
                 <td><strong><?= safe_format_currency($grand_total) ?></strong></td>
             </tr>
         </tbody>

@@ -37,12 +37,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
         // Handle purchase items
         $product_ids = $_POST['product_id'];
         $colors = $_POST['color'] ?? [];
+        $custom_colors = $_POST['custom_color'] ?? [];
         $quantities = $_POST['quantity'];
         $unit_prices = $_POST['unit_price'];
         $total_prices = $_POST['total_price'];
         
         // Debug: Log color data
         error_log("Colors received: " . print_r($colors, true));
+        error_log("Custom colors received: " . print_r($custom_colors, true));
+        error_log("Product IDs: " . print_r($product_ids, true));
 
         for ($i = 0; $i < count($product_ids); $i++) {
             if (!empty($product_ids[$i])) {
@@ -52,17 +55,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
                 $product = $stmt->fetch(PDO::FETCH_ASSOC);
                 $product_code = $product ? $product['product_code'] : '';
                 
-                $color = $colors[$i] ?? '#000000';
+                // Determine the final color value
+                $color = '';
+                if (isset($colors[$i]) && $colors[$i] === 'custom') {
+                    // If custom is selected, use the custom color input
+                    $color = $custom_colors[$i] ?? '';
+                } elseif (isset($colors[$i]) && $colors[$i] !== '') {
+                    // If a predefined color is selected
+                    $color = $colors[$i];
+                }
                 
-                // Debug: Log color being inserted
-                error_log("Inserting color: $color for product_id: {$product_ids[$i]}");
+                // Debug: Log color/names being inserted
+                error_log("Inserting color/names: $color for product_id: {$product_ids[$i]}");
                 
                 $stmt = $pdo->prepare("INSERT INTO purchase_items (purchase_id, product_id, product_code, color, purchase_price, sale_price, quantity, purchase_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$purchase_id, $product_ids[$i], $product_code, $color, $unit_prices[$i], $unit_prices[$i], $quantities[$i], $total_prices[$i]]);
 
                 // Add to stock_items table for inventory management
                 try {
-                    error_log("Inserting into stock_items - Color: $color, Product ID: {$product_ids[$i]}");
+                    error_log("Inserting into stock_items - Color/Names: $color, Product ID: {$product_ids[$i]}");
                     $stmt = $pdo->prepare("INSERT INTO stock_items (product_id, purchase_item_id, product_code, color, quantity, purchase_price, sale_price, stock_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'available')");
                     $stmt->execute([$product_ids[$i], $purchase_id, $product_code, $color, $quantities[$i], $unit_prices[$i], $unit_prices[$i]]);
                 } catch (Exception $e) {
@@ -92,8 +103,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
             }
         }
 
-        // Log successful purchase with colors
-        error_log("Purchase completed successfully with colors: " . implode(', ', array_filter($colors)));
+        // Log successful purchase with colors/names
+        error_log("Purchase completed successfully with colors/names: " . implode(', ', array_filter($colors)));
         
         $pdo->commit();
         header("Location: add_purchase.php?success=added&purchase_id=" . $purchase_id);
@@ -113,21 +124,6 @@ $products = $pdo->query("SELECT * FROM products ORDER BY product_name")->fetchAl
 include 'includes/header.php';
 ?>
 <style>
-.color-preview {
-    transition: background-color 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.form-control-color {
-    cursor: pointer;
-    border: 1px solid #ced4da;
-}
-
-.form-control-color:hover {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
-}
-
 .purchase-item-row {
     background-color: #f8f9fa;
     border-radius: 5px;
@@ -206,12 +202,21 @@ include 'includes/header.php';
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="col-md-1">
-                                        <label class="form-label small">Color</label>
-                                        <div class="d-flex align-items-center">
-                                            <input type="color" name="color[]" class="form-control form-control-color me-2" value="#000000" title="Click to choose fabric color" style="height: 38px; width: 80px;">
-                                            <span class="color-preview" style="width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 3px; background-color: #000000;" title="Selected color preview"></span>
-                                        </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small">Color/Names</label>
+                                        <select name="color[]" class="form-control color-select" style="height: 38px;">
+                                            <option value="">Select Color</option>
+                                            <option value="Red">Red</option>
+                                            <option value="Blue">Blue</option>
+                                            <option value="Green">Green</option>
+                                            <option value="Yellow">Yellow</option>
+                                            <option value="Black">Black</option>
+                                            <option value="White">White</option>
+                                            <option value="Purple">Purple</option>
+                                            <option value="custom">+ Add Custom Color</option>
+                                        </select>
+                                        <input type="text" name="custom_color[]" class="form-control custom-color-input mt-1" placeholder="Enter custom color names" style="height: 32px; display: none;">
+                                        <!-- <small class="text-muted">Select from list or add custom names</small> -->
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label small">Quantity</label>
@@ -347,17 +352,15 @@ document.getElementById('addItem').addEventListener('click', function() {
     
     // Reset all form fields
     newRow.querySelectorAll('input, select').forEach(input => {
-        if (input.type === 'color') {
-            input.value = '#000000'; // Reset color to default
-            // Reset color preview
-            const colorPreview = input.parentElement.querySelector('.color-preview');
-            if (colorPreview) {
-                colorPreview.style.backgroundColor = '#000000';
-            }
-        } else {
-            input.value = '';
-        }
+        input.value = '';
     });
+    
+    // Hide custom color input in new row
+    const customColorInput = newRow.querySelector('.custom-color-input');
+    if (customColorInput) {
+        customColorInput.style.display = 'none';
+        customColorInput.required = false;
+    }
     
     container.appendChild(newRow);
     
@@ -437,43 +440,70 @@ function calculateGrandTotal() {
 document.addEventListener('DOMContentLoaded', function() {
     calculateGrandTotal();
     
-    // Initialize color preview functionality
-    initializeColorPreviews();
+    // Initialize color dropdown functionality
+    initializeColorDropdowns();
     
-    // Add form validation for colors
+    // Form validation for colors/names
     document.getElementById('purchaseForm').addEventListener('submit', function(e) {
-        const colorInputs = document.querySelectorAll('input[name="color[]"]');
-        let hasValidColors = true;
+        const colorSelects = document.querySelectorAll('select[name="color[]"]');
+        const customColorInputs = document.querySelectorAll('input[name="custom_color[]"]');
+        let isValid = true;
         
-        colorInputs.forEach((input, index) => {
-            if (!input.value || input.value === '#000000') {
-                console.log(`Color ${index + 1} is default or empty`);
-            } else {
-                console.log(`Color ${index + 1} selected: ${input.value}`);
+        console.log('Form submission - validating colors...');
+        
+        colorSelects.forEach((select, index) => {
+            console.log(`Item ${index + 1}: Color select value = "${select.value}"`);
+            
+            if (select.value === 'custom') {
+                // Check if custom color input has value
+                const customInput = select.closest('.row').querySelector('.custom-color-input');
+                console.log(`Item ${index + 1}: Custom input value = "${customInput.value}"`);
+                
+                if (!customInput.value.trim()) {
+                    alert(`Please enter a custom color name for item ${index + 1}`);
+                    isValid = false;
+                    e.preventDefault();
+                    return;
+                }
+            } else if (select.value === '') {
+                alert(`Please select a color for item ${index + 1}`);
+                isValid = false;
+                e.preventDefault();
+                return;
             }
         });
         
-        // Log all form data for debugging
-        const formData = new FormData(this);
-        for (let [key, value] of formData.entries()) {
-            if (key === 'color[]') {
-                console.log(`Form color data: ${key} = ${value}`);
-            }
+        if (!isValid) {
+            e.preventDefault();
+        } else {
+            console.log('Color validation passed, form will submit');
         }
     });
 });
 
-// Color preview functionality
-function initializeColorPreviews() {
-    document.addEventListener('input', function(e) {
-        if (e.target.type === 'color') {
-            const colorPreview = e.target.parentElement.querySelector('.color-preview');
-            if (colorPreview) {
-                colorPreview.style.backgroundColor = e.target.value;
+// Color dropdown functionality
+function initializeColorDropdowns() {
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('color-select')) {
+            const row = e.target.closest('.row');
+            const customInput = row.querySelector('.custom-color-input');
+            
+            if (e.target.value === 'custom') {
+                customInput.style.display = 'block';
+                customInput.required = true;
+                e.target.required = false;
+            } else {
+                customInput.style.display = 'none';
+                customInput.required = false;
+                e.target.required = true;
             }
         }
     });
 }
+
+
+
+
 
 // Supplier modal functionality
 function openAddSupplierModal() {
