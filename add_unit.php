@@ -189,10 +189,16 @@ include __DIR__ . '/includes/header.php';
     
 
     <?php if (isset($_GET['success']) && $_GET['success'] === 'added'): ?>
-        <div class="alert alert-success">Unit added successfully.</div>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            Unit added successfully.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
     <?php endif; ?>
     <?php if (!empty($error)): ?>
-        <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <?= htmlspecialchars($error) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
     <?php endif; ?>
 
     <div class="row g-3">

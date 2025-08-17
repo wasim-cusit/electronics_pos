@@ -1012,6 +1012,14 @@ document.getElementById('addCustomerForm').addEventListener('submit', function(e
         const mainContent = document.querySelector('.main-content');
         mainContent.insertBefore(successAlert, mainContent.firstChild);
         
+        // Auto-hide the alert after 5 seconds
+        setTimeout(() => {
+            if (successAlert.parentNode) {
+                const bsAlert = new bootstrap.Alert(successAlert);
+                bsAlert.close();
+            }
+        }, 5000);
+        
         // Update customer dropdown
         const select = document.getElementById('customerSelect');
         const option = document.createElement('option');
@@ -1044,9 +1052,7 @@ document.getElementById('addCustomerForm').addEventListener('submit', function(e
           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
         
-        // Insert alert at the top of the page
-        const mainContent = document.querySelector('.main-content');
-        mainContent.insertBefore(errorAlert, mainContent.firstChild);
+
       }
     })
     .catch((error) => {
@@ -1062,6 +1068,14 @@ document.getElementById('addCustomerForm').addEventListener('submit', function(e
       // Insert alert at the top of the page
       const mainContent = document.querySelector('.main-content');
       mainContent.insertBefore(errorAlert, mainContent.firstChild);
+      
+      // Auto-hide the alert after 5 seconds
+      setTimeout(() => {
+          if (errorAlert.parentNode) {
+              const bsAlert = new bootstrap.Alert(errorAlert);
+              bsAlert.close();
+          }
+      }, 5000);
     })
     .finally(() => {
       // Reset button state

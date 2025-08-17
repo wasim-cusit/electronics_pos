@@ -103,17 +103,19 @@ include 'includes/header.php';
             </div>
 
             <?php if (isset($_GET['success'])): ?>
-                <div class="alert alert-success">
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
                     <?php
                     if ($_GET['success'] === 'added') echo "Product added successfully! <a href='products.php' target='_blank'>View All Products</a>";
                     if ($_GET['success'] === 'updated') echo "Product updated successfully! <a href='products.php' target='_blank'>View All Products</a>";
                     ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             <?php endif; ?>
 
             <?php if (isset($error)): ?>
-                <div class="alert alert-danger">
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     <?= htmlspecialchars($error) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             <?php endif; ?>
 

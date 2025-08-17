@@ -692,14 +692,7 @@ include 'includes/header.php';
         window.URL.revokeObjectURL(url);
     }
 
-    // Auto-hide alerts after 5 seconds
-    setTimeout(function() {
-        const alerts = document.querySelectorAll('.alert');
-        alerts.forEach(alert => {
-            const bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
-        });
-    }, 5000);
+    // Auto-hide functionality is now handled globally in footer.php
 </script>
 
 <?php include 'includes/footer.php'; ?>

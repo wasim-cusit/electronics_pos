@@ -59,12 +59,13 @@ include 'includes/header.php';
             </div>
 
             <?php if (isset($_GET['success'])): ?>
-                <div class="alert alert-success">
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
                     <?php
                     if ($_GET['success'] === 'added') echo "Customer added successfully!";
                     if ($_GET['success'] === 'updated') echo "Customer updated successfully!";
                     if ($_GET['success'] === 'deleted') echo "Customer deleted successfully!";
                     ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             <?php endif; ?>
 
