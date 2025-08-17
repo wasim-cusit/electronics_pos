@@ -63,6 +63,19 @@ function safe_get_setting($key, $default = '') {
         return $default;
     }
 }
+
+function extractColorFromNotes($notes) {
+    if (empty($notes)) {
+        return 'N/A';
+    }
+    
+    // Check if notes contain color information
+    if (strpos($notes, 'Color:') === 0) {
+        return trim(substr($notes, 6)); // Remove "Color: " prefix
+    }
+    
+    return 'N/A';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -246,14 +259,15 @@ function safe_get_setting($key, $default = '') {
         <thead>
             <tr>
                 <th width="4%">#</th>
-                <th width="20%">Product Name</th>
-                <th width="12%">Category</th>
+                <th width="18%">Product Name</th>
+                <th width="10%">Category</th>
+                <th width="8%">Color</th>
                 <th width="8%">Unit</th>
                 <th width="8%">Quantity</th>
                 <th width="12%">Unit Price</th>
                 <th width="12%">Total</th>
-                <th width="12%" class="">Paid</th>
-                <th width="12%" class="">Remaining</th>
+                <th width="10%" class="">Paid</th>
+                <th width="10%" class="">Remaining</th>
             </tr>
         </thead>
         <tbody>
@@ -276,6 +290,7 @@ function safe_get_setting($key, $default = '') {
                     <td><?= $counter++ ?></td>
                     <td><?= htmlspecialchars($item['product_name'] ?? 'N/A') ?></td>
                     <td><?= htmlspecialchars($item['category_name'] ?? 'N/A') ?></td>
+                    <td><?= htmlspecialchars(extractColorFromNotes($item['notes'] ?? '')) ?></td>
                     <td><?= htmlspecialchars($item['product_unit'] ?? 'N/A') ?></td>
                     <td><?= number_format($item['quantity'] ?? 0, 2) ?></td>
                     <td><?= safe_format_currency($item['unit_price'] ?? 0) ?></td>
@@ -285,7 +300,7 @@ function safe_get_setting($key, $default = '') {
                 </tr>
             <?php endforeach; ?>
             <tr class="total-row">
-                <td colspan="7" style="text-align: right;"><strong>Grand Total:</strong></td>
+                <td colspan="8" style="text-align: right;"><strong>Grand Total:</strong></td>
                 <td><strong><?= safe_format_currency($grand_total) ?></strong></td>
             </tr>
         </tbody>

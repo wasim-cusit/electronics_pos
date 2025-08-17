@@ -18,9 +18,29 @@ if (isset($_GET['delete'])) {
     
     foreach ($items as $item) {
         try {
-            // Remove from stock_items table
-            $stmt = $pdo->prepare("DELETE FROM stock_items WHERE purchase_item_id = ? AND product_id = ? LIMIT ?");
-            $stmt->execute([$id, $item['product_id'], $item['quantity']]);
+            // Find and remove the exact stock items for this purchase
+            $stmt = $pdo->prepare("SELECT id, quantity FROM stock_items WHERE purchase_item_id = ? AND product_id = ? AND status = 'available' ORDER BY id ASC");
+            $stmt->execute([$id, $item['product_id']]);
+            $stock_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $remaining_qty = $item['quantity'];
+            foreach ($stock_items as $stock_item) {
+                if ($remaining_qty <= 0) break;
+                
+                $qty_to_remove = min($stock_item['quantity'], $remaining_qty);
+                
+                if ($stock_item['quantity'] <= $qty_to_remove) {
+                    // Remove entire stock item
+                    $stmt = $pdo->prepare("DELETE FROM stock_items WHERE id = ?");
+                    $stmt->execute([$stock_item['id']]);
+                } else {
+                    // Reduce quantity
+                    $stmt = $pdo->prepare("UPDATE stock_items SET quantity = quantity - ? WHERE id = ?");
+                    $stmt->execute([$qty_to_remove, $stock_item['id']]);
+                }
+                
+                $remaining_qty -= $qty_to_remove;
+            }
         } catch (Exception $e) {
             error_log("Stock items removal failed: " . $e->getMessage());
         }

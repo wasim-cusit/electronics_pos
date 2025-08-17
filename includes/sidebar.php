@@ -192,6 +192,12 @@ if (is_logged_in()) {
       </li>
       
       <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'return_percale' ? ' active' : '' ?>" href="<?= $base_url ?>return_percale.php">
+          <i class="bi bi-arrow-return-left me-2"></i>Return Percale
+        </a>
+      </li>
+      
+      <li class="nav-item mb-2">
         <a class="nav-link<?= $activePage === 'unit' || $activePage === 'add_unit' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#unitsSubmenu" aria-expanded="<?= $activePage === 'unit' || $activePage === 'add_unit' ? 'true' : 'false' ?>" aria-controls="unitsSubmenu">
           <i class="bi bi-rulers me-2"></i>Unit Prices
           <i class="bi bi-chevron-right ms-auto"></i>

@@ -67,6 +67,20 @@ try {
 // Use the stored subtotal from the sale table for consistency
 $grand_total = $sale['subtotal'] ?? 0;
 
+// Helper function to extract color from notes
+function extractColorFromNotes($notes) {
+    if (empty($notes)) {
+        return 'N/A';
+    }
+    
+    // Check if notes contain color information
+    if (strpos($notes, 'Color:') === 0) {
+        return trim(substr($notes, 6)); // Remove "Color: " prefix
+    }
+    
+    return 'N/A';
+}
+
 include 'includes/header.php';
 ?>
 <div class="container-fluid">
@@ -257,6 +271,7 @@ include 'includes/header.php';
                                 <th><i class="bi bi-hash"></i> #</th>
                                 <th><i class="bi bi-box"></i> Product Name</th>
                                 <th><i class="bi bi-tags"></i> Category</th>
+                                <th><i class="bi bi-palette"></i> Color</th>
                                 <th><i class="bi bi-rulers"></i> Unit</th>
                                 <th><i class="bi bi-123"></i> Quantity</th>
                                 <th><i class="bi bi-currency-dollar"></i> Unit Price</th>
@@ -279,6 +294,16 @@ include 'includes/header.php';
                                     <td><span class="badge bg-secondary"><?= $counter++ ?></span></td>
                                     <td><strong><?= htmlspecialchars($item['product_name']) ?></strong></td>
                                     <td><span class="badge bg-info"><?= htmlspecialchars($item['category_name_final']) ?></span></td>
+                                    <td>
+                                        <?php 
+                                        $color = extractColorFromNotes($item['notes'] ?? '');
+                                        if ($color !== 'N/A') {
+                                            echo '<span class="badge bg-light text-dark">' . htmlspecialchars($color) . '</span>';
+                                        } else {
+                                            echo '<span class="text-muted">-</span>';
+                                        }
+                                        ?>
+                                    </td>
                                     <td><?= htmlspecialchars($item['product_unit']) ?></td>
                                     <td><span class="badge bg-warning text-dark"><?= number_format($item['quantity'], 2) ?></span></td>
                                     <td><span class="badge bg-primary">PKR <?= number_format($item['price'], 2) ?></span></td>
@@ -294,7 +319,7 @@ include 'includes/header.php';
                                 </tr>
                             <?php endforeach; ?>
                             <tr class="table-warning">
-                                <td colspan="7" class="text-end"><strong><i class="bi bi-calculator"></i> Grand Total:</strong></td>
+                                <td colspan="8" class="text-end"><strong><i class="bi bi-calculator"></i> Grand Total:</strong></td>
                                 <td><strong><span class="badge bg-success fs-6">PKR <?= number_format($grand_total, 2) ?></span></strong></td>
                             </tr>
                         </tbody>
