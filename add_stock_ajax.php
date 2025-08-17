@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 try {
     $product_id = intval($_POST['product_id']);
-    $quantity = intval($_POST['quantity']);
+    $quantity = floatval($_POST['quantity']);
     $purchase_price = floatval($_POST['purchase_price']);
     $sale_price = floatval($_POST['sale_price']);
     $stock_date = $_POST['stock_date'];
@@ -23,14 +23,22 @@ try {
         throw new Exception('Invalid input parameters');
     }
     
+    // Validate sale price is not less than purchase price
+    if ($sale_price < $purchase_price) {
+        throw new Exception('Sale price cannot be less than purchase price');
+    }
+    
     // Get product information
-    $stmt = $pdo->prepare("SELECT product_code FROM products WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT product_code, product_name FROM products WHERE id = ? AND status = 1");
     $stmt->execute([$product_id]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$product) {
-        throw new Exception('Product not found');
+        throw new Exception('Product not found or inactive');
     }
+    
+    // Generate unique product code for this stock item
+    $stock_code = $product['product_code'] . '-' . date('Ymd') . '-' . str_pad(rand(1, 999), 3, '0', STR_PAD_LEFT);
     
     // Insert stock item
     $stmt = $pdo->prepare("
@@ -38,12 +46,18 @@ try {
         VALUES (?, ?, ?, ?, ?, ?, 'available')
     ");
     
-    $stmt->execute([$product_id, $product['product_code'], $quantity, $purchase_price, $sale_price, $stock_date]);
+    $stmt->execute([$product_id, $stock_code, $quantity, $purchase_price, $sale_price, $stock_date]);
+    
+    $stock_id = $pdo->lastInsertId();
+    
+    // Note: stock_movements table doesn't exist in the current database
+    // Stock addition logging is not available
     
     echo json_encode([
         'success' => true, 
-        'message' => 'Stock added successfully',
-        'stock_id' => $pdo->lastInsertId()
+        'message' => "Stock added successfully: {$quantity} units of {$product['product_name']}",
+        'stock_id' => $stock_id,
+        'stock_code' => $stock_code
     ]);
     
 } catch (Exception $e) {

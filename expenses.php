@@ -647,6 +647,34 @@ include 'includes/header.php';
 </style>
 
 <script>
+// Notification function to replace alerts
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+    
+    // Allow manual close
+    notification.querySelector('.btn-close').addEventListener('click', () => {
+        notification.remove();
+    });
+}
+
 // Auto-dismiss notifications
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-dismiss success notifications after 5 seconds
@@ -683,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 fileInfo.className = 'text-info';
                 
                 if (file.size > maxSize) {
-                    alert('File size must be less than 5MB');
+                    showNotification('File size must be less than 5MB', 'warning');
                     this.value = '';
                     fileInfo.innerHTML = '';
                     return;
@@ -691,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'image/gif'];
                 if (!allowedTypes.includes(file.type)) {
-                    alert('Please select a valid file type (PDF, DOC, DOCX, JPG, PNG, GIF)');
+                    showNotification('Please select a valid file type (PDF, DOC, DOCX, JPG, PNG, GIF)', 'warning');
                     this.value = '';
                     fileInfo.innerHTML = '';
                     return;

@@ -591,12 +591,12 @@ function updateSalesChart() {
     const endDate = document.getElementById('endDate').value;
     
     if (!startDate || !endDate) {
-        alert('Please select both start and end dates');
+        showNotification('Please select both start and end dates', 'warning');
         return;
     }
     
     if (new Date(startDate) > new Date(endDate)) {
-        alert('Start date cannot be after end date');
+        showNotification('Start date cannot be after end date', 'warning');
         return;
     }
     
@@ -616,7 +616,6 @@ function updateSalesChart() {
                 try {
                     return JSON.parse(text);
                 } catch (e) {
-                    console.error('Response text:', text);
                     throw new Error('Invalid JSON response from server');
                 }
             });
@@ -645,7 +644,6 @@ function updateSalesChart() {
             showNotification('Chart updated successfully!', 'success');
         })
         .catch(error => {
-            console.error('Error updating chart:', error);
             showNotification('Error updating chart: ' + error.message, 'error');
         })
         .finally(() => {

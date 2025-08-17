@@ -20,14 +20,23 @@ $stock_query = "
         COALESCE(SUM(CASE WHEN si.status = 'available' THEN si.quantity ELSE 0 END), 0) as available_stock,
         COALESCE(SUM(CASE WHEN si.status = 'reserved' THEN si.quantity ELSE 0 END), 0) as reserved_stock,
         COALESCE(SUM(CASE WHEN si.status = 'sold' THEN si.quantity ELSE 0 END), 0) as sold_stock,
-        COALESCE(AVG(si.purchase_price), 0) as avg_purchase_price,
-        COALESCE(AVG(si.sale_price), 0) as avg_sale_price,
-        p.status as product_status,
-        p.created_at
+        COALESCE(AVG(CASE WHEN si.status = 'available' THEN si.purchase_price END), 0) as avg_purchase_price,
+        COALESCE(AVG(CASE WHEN si.status = 'available' THEN si.sale_price END), 0) as avg_sale_price,
+        CASE 
+            WHEN SUM(CASE WHEN si.status = 'available' THEN si.quantity ELSE 0 END) > 0 
+            THEN COALESCE(SUM(CASE WHEN si.status = 'available' THEN si.quantity * si.purchase_price ELSE 0 END) / SUM(CASE WHEN si.status = 'available' THEN si.quantity ELSE 0 END), 0)
+            ELSE 0 
+        END as weighted_avg_purchase_price,
+        CASE 
+            WHEN SUM(CASE WHEN si.status = 'available' THEN si.quantity ELSE 0 END) > 0 
+            THEN COALESCE(SUM(CASE WHEN si.status = 'available' THEN si.quantity * si.sale_price ELSE 0 END) / SUM(CASE WHEN si.status = 'available' THEN si.quantity ELSE 0 END), 0)
+            ELSE 0 
+        END as weighted_avg_sale_price,
+        p.status as product_status
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN stock_items si ON p.id = si.product_id
-    GROUP BY p.id, p.product_name, p.product_code, p.product_unit, p.alert_quantity, p.description, p.color, c.category, p.status, p.created_at
+    GROUP BY p.id, p.product_name, p.product_code, p.product_unit, p.alert_quantity, p.description, p.color, c.category, p.status
     ORDER BY p.product_name
 ";
 
@@ -56,6 +65,8 @@ include 'includes/header.php';
                     </div>
                 </div>
             </div>
+
+
 
             <!-- Stock Summary Cards -->
             <div class="row mb-4">
@@ -193,9 +204,11 @@ include 'includes/header.php';
                                             </td>
                                             <td>
                                                 <span class="text-success"><?= number_format($item['avg_purchase_price'], 2) ?> PKR </span>
+                                                <br><small class="text-muted">(Simple avg)</small>
                                             </td>
                                             <td>
                                                 <span class="text-primary"> <?= number_format($item['avg_sale_price'], 2) ?> PKR </span>
+                                                <br><small class="text-muted">(Simple avg)</small>
                                             </td>
                                             <td>
                                                 <?php if ($item['total_stock'] == 0): ?>
@@ -231,18 +244,25 @@ include 'includes/header.php';
     </div>
 </div>
 
-<!-- Stock History Modal -->
+        <!-- Stock History Modal -->
 <div class="modal fade" id="stockHistoryModal" tabindex="-1" aria-labelledby="stockHistoryModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="stockHistoryModalLabel">Stock History</h5>
+                <h5 class="modal-title" id="stockHistoryModalLabel">
+                    <i class="bi bi-clock-history me-2"></i>Stock History
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="stockHistoryContent">
                 <!-- Content will be loaded here -->
             </div>
             <div class="modal-footer">
+                <div class="me-auto">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportStockHistory()">
+                        <i class="bi bi-download me-1"></i>Export CSV
+                    </button>
+                </div>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
@@ -290,15 +310,266 @@ include 'includes/header.php';
 // Set today's date as default for stock date
 document.getElementById('stockDate').valueAsDate = new Date();
 
+// Notification function to replace alerts
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+    
+    // Allow manual close
+    notification.querySelector('.btn-close').addEventListener('click', () => {
+        notification.remove();
+    });
+}
+
 function viewStockHistory(productId) {
-    // This would typically load stock history from the database
+    // Show loading state
     document.getElementById('stockHistoryContent').innerHTML = `
         <div class="text-center">
-            <p>Stock history for product ID: ${productId}</p>
-            <p class="text-muted">This feature will show detailed stock movement history.</p>
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading stock history...</p>
         </div>
     `;
+    
+    // Show modal first
     new bootstrap.Modal(document.getElementById('stockHistoryModal')).show();
+    
+    // Fetch stock history data
+    fetch(`get_stock_history.php?product_id=${productId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayStockHistory(data.history, data.product_info);
+            } else {
+                document.getElementById('stockHistoryContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Error loading stock history: ${data.message}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            document.getElementById('stockHistoryContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Failed to load stock history. Please try again.
+                </div>
+            `;
+        });
+}
+
+function displayStockHistory(history, productInfo) {
+    let html = `
+        <div class="mb-3">
+            <h6 class="text-primary mb-2">
+                <i class="bi bi-box me-2"></i>${productInfo.product_name}
+            </h6>
+            <div class="row">
+                <div class="col-md-6">
+                    <small class="text-muted">Product Code: <strong>${productInfo.product_code}</strong></small>
+                </div>
+                <div class="col-md-6">
+                    <small class="text-muted">Category: <strong>${productInfo.category}</strong></small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Summary Cards -->
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body p-2 text-center">
+                        <small class="card-title">Total Added</small>
+                        <h6 class="mb-0">${productInfo.summary ? productInfo.summary.total_added : 0}</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body p-2 text-center">
+                        <small class="card-title">Total Sold</small>
+                        <h6 class="mb-0">${productInfo.summary ? productInfo.summary.total_sold : 0}</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body p-2 text-center">
+                        <small class="card-title">Reserved</small>
+                        <h6 class="mb-0">${productInfo.summary ? productInfo.summary.total_reserved : 0}</h6>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body p-2 text-center">
+                        <small class="card-title">Current Stock</small>
+                        <h6 class="mb-0">${productInfo.summary ? productInfo.summary.current_stock : 0}</h6>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr>
+    `;
+    
+    if (history.length === 0) {
+        html += `
+            <div class="text-center text-muted">
+                <i class="bi bi-inbox fs-1"></i>
+                <p class="mt-2">No stock movements found for this product.</p>
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Total Value</th>
+                            <th>Status</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        history.forEach(item => {
+            const movementType = getMovementTypeLabel(item.movement_type);
+            const statusBadge = getStatusBadge(item.status);
+            const totalValue = (item.quantity * item.price).toFixed(2);
+            
+            html += `
+                <tr>
+                    <td>
+                        <small class="text-muted">${formatDate(item.movement_date)}</small>
+                    </td>
+                    <td>
+                        <span class="badge ${getMovementTypeBadge(item.movement_type)}">
+                            ${movementType}
+                        </span>
+                    </td>
+                    <td>
+                        <strong>${item.quantity}</strong>
+                    </td>
+                    <td>
+                        <span class="text-success">${item.price} PKR</span>
+                    </td>
+                    <td>
+                        <span class="text-primary fw-bold">${totalValue} PKR</span>
+                    </td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <small class="text-muted">${item.notes || '-'}</small>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    document.getElementById('stockHistoryContent').innerHTML = html;
+}
+
+function getMovementTypeLabel(type) {
+    const labels = {
+        'added': 'Stock Added',
+        'sold': 'Sold',
+        'reserved': 'Reserved',
+        'returned': 'Returned',
+        'adjusted': 'Adjusted'
+    };
+    return labels[type] || type;
+}
+
+function getMovementTypeBadge(type) {
+    const badges = {
+        'added': 'bg-success',
+        'sold': 'bg-primary',
+        'reserved': 'bg-warning',
+        'returned': 'bg-info',
+        'adjusted': 'bg-secondary'
+    };
+    return badges[type] || 'bg-secondary';
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'available': 'bg-success',
+        'reserved': 'bg-warning',
+        'sold': 'bg-primary'
+    };
+    return `<span class="badge ${badges[status] || 'bg-secondary'}">${status}</span>`;
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+function exportStockHistory() {
+    const table = document.querySelector('#stockHistoryContent table');
+    if (!table) {
+        showNotification('No stock history data to export', 'warning');
+        return;
+    }
+    
+    const rows = table.querySelectorAll('tbody tr');
+    let csv = 'Date,Type,Quantity,Price,Total Value,Status,Notes\n';
+    
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length > 1) {
+            const rowData = [];
+            cells.forEach(cell => {
+                let text = cell.textContent.trim();
+                // Remove HTML tags and clean up
+                text = text.replace(/<[^>]*>/g, '');
+                text = text.replace(/,/g, ';');
+                rowData.push(`"${text}"`);
+            });
+            csv += rowData.join(',') + '\n';
+        }
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'stock_history_' + new Date().toISOString().split('T')[0] + '.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
 }
 
 function addStock(productId) {
@@ -318,16 +589,16 @@ function saveStock() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
+            // Show success message in a more user-friendly way
+            showNotification(data.message, 'success');
             // Reload the page to show updated stock
             location.reload();
         } else {
-            alert('Error: ' + data.message);
+            showNotification('Error: ' + data.message, 'error');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while adding stock');
+        showNotification('An error occurred while adding stock', 'error');
     })
     .finally(() => {
         // Close modal
@@ -339,14 +610,14 @@ function exportToCSV() {
     const table = document.getElementById('stockTable');
     const rows = table.querySelectorAll('tbody tr');
     
-    let csv = 'S.No,Product,Product Code,Color,Category,Unit,Alert Quantity,Total Stock,Available,Reserved,Sold,Avg Purchase Price,Avg Sale Price,Status\n';
+    let csv = 'S.No,Product,Product Code,Color,Category,Unit,Alert Quantity,Total Stock,Available,Reserved,Sold,Simple Avg Purchase Price,Simple Avg Sale Price,Status\n';
     
     rows.forEach((row, index) => {
         const cells = row.querySelectorAll('td');
         if (cells.length > 1) { // Skip empty rows
             const rowData = [];
             cells.forEach((cell, cellIndex) => {
-                if (cellIndex < 14) { // Exclude Actions column, include Color column
+                if (cellIndex < 14) { // Include all columns except Actions
                     let text = cell.textContent.trim();
                     // Remove HTML tags and clean up
                     text = text.replace(/<[^>]*>/g, '');
@@ -362,7 +633,7 @@ function exportToCSV() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'stock_details.csv';
+    a.download = 'stock_details_' + new Date().toISOString().split('T')[0] + '.csv';
     a.click();
     window.URL.revokeObjectURL(url);
 }
@@ -525,5 +796,58 @@ function printStock() {
         box-shadow: none !important;
         border: 1px solid #dee2e6 !important;
     }
+}
+
+/* Stock History Modal Styles */
+.modal-xl {
+    max-width: 95%;
+}
+
+#stockHistoryContent .card {
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#stockHistoryContent .card-body {
+    padding: 0.5rem;
+}
+
+#stockHistoryContent .table {
+    font-size: 0.85rem;
+}
+
+#stockHistoryContent .table th {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#stockHistoryContent .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Summary cards in modal */
+#stockHistoryContent .card.bg-success,
+#stockHistoryContent .card.bg-primary,
+#stockHistoryContent .card.bg-warning,
+#stockHistoryContent .card.bg-info {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+#stockHistoryContent .card .card-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#stockHistoryContent .card h6 {
+    font-weight: 700;
+    margin: 0;
 }
 </style>

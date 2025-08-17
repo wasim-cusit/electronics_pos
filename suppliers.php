@@ -231,6 +231,34 @@ include 'includes/header.php';
 </div>
 
 <script>
+// Notification function to replace alerts
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+    
+    // Allow manual close
+    notification.querySelector('.btn-close').addEventListener('click', () => {
+        notification.remove();
+    });
+}
+
 // Supplier modal functionality
 function openAddSupplierModal() {
     // Clear the form
@@ -245,7 +273,7 @@ function saveSupplier() {
     
     // Validate required fields
     if (!formData.get('supplier_name').trim()) {
-        alert('Supplier name is required!');
+        showNotification('Supplier name is required!', 'warning');
         return;
     }
     
@@ -261,17 +289,16 @@ function saveSupplier() {
             bootstrap.Modal.getInstance(document.getElementById('addSupplierModal')).hide();
             
             // Show success message
-            alert('Supplier added successfully!');
+            showNotification('Supplier added successfully!', 'success');
             
             // Reload the page to show the new supplier
             location.reload();
         } else {
-            alert('Error: ' + data.message);
+            showNotification('Error: ' + data.message, 'error');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while adding supplier');
+        showNotification('An error occurred while adding supplier', 'error');
     });
 }
 </script>

@@ -43,9 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
         $total_prices = $_POST['total_price'];
         
         // Debug: Log color data
-        error_log("Colors received: " . print_r($colors, true));
-        error_log("Custom colors received: " . print_r($custom_colors, true));
-        error_log("Product IDs: " . print_r($product_ids, true));
+
 
         for ($i = 0; $i < count($product_ids); $i++) {
             if (!empty($product_ids[$i])) {
@@ -66,18 +64,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
                 }
                 
                 // Debug: Log color/names being inserted
-                error_log("Inserting color/names: $color for product_id: {$product_ids[$i]}");
+    
                 
                 $stmt = $pdo->prepare("INSERT INTO purchase_items (purchase_id, product_id, product_code, color, purchase_price, sale_price, quantity, purchase_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$purchase_id, $product_ids[$i], $product_code, $color, $unit_prices[$i], $unit_prices[$i], $quantities[$i], $total_prices[$i]]);
 
                 // Add to stock_items table for inventory management
                 try {
-                    error_log("Inserting into stock_items - Color/Names: $color, Product ID: {$product_ids[$i]}");
+        
                     $stmt = $pdo->prepare("INSERT INTO stock_items (product_id, purchase_item_id, product_code, color, quantity, purchase_price, sale_price, stock_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'available')");
                     $stmt->execute([$product_ids[$i], $purchase_id, $product_code, $color, $quantities[$i], $unit_prices[$i], $unit_prices[$i]]);
                 } catch (Exception $e) {
-                    error_log("Stock items update failed: " . $e->getMessage());
+                    // Continue with purchase even if stock update fails
                 }
 
                 // Check for low stock and create notification if needed
@@ -98,20 +96,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
                     }
                 } catch (Exception $e) {
                     // If any of these operations fail, skip notification
-                    error_log("Low stock check failed: " . $e->getMessage());
                 }
             }
         }
 
-        // Log successful purchase with colors/names
-        error_log("Purchase completed successfully with colors/names: " . implode(', ', array_filter($colors)));
-        
         $pdo->commit();
         header("Location: add_purchase.php?success=added&purchase_id=" . $purchase_id);
         exit;
     } catch (Exception $e) {
         $pdo->rollBack();
-        error_log("Purchase failed: " . $e->getMessage());
         header("Location: add_purchase.php?error=purchase_failed");
         exit;
     }
@@ -459,6 +452,34 @@ include 'includes/header.php';
 </div>
 
 <script>
+// Notification function to replace alerts
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+    
+    // Allow manual close
+    notification.querySelector('.btn-close').addEventListener('click', () => {
+        notification.remove();
+    });
+}
+
 document.getElementById('addItem').addEventListener('click', function() {
     const container = document.getElementById('purchaseItems');
     const newRow = container.children[0].cloneNode(true);
@@ -562,34 +583,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const customColorInputs = document.querySelectorAll('input[name="custom_color[]"]');
         let isValid = true;
         
-        console.log('Form submission - validating colors...');
-        
-        colorSelects.forEach((select, index) => {
-            console.log(`Item ${index + 1}: Color select value = "${select.value}"`);
-            
+                colorSelects.forEach((select, index) => {
             if (select.value === 'custom') {
                 // Check if custom color input has value
                 const customInput = select.closest('.row').querySelector('.custom-color-input');
-                console.log(`Item ${index + 1}: Custom input value = "${customInput.value}"`);
                 
                 if (!customInput.value.trim()) {
-                    alert(`Please enter a custom color name for item ${index + 1}`);
+                    showNotification(`Please enter a custom color name for item ${index + 1}`, 'warning');
                     isValid = false;
                     e.preventDefault();
                     return;
                 }
             } else if (select.value === '') {
-                alert(`Please select a color for item ${index + 1}`);
+                showNotification(`Please select a color for item ${index + 1}`, 'warning');
                 isValid = false;
-                e.preventDefault();
-                return;
+                    e.preventDefault();
+                    return;
             }
         });
         
         if (!isValid) {
             e.preventDefault();
-        } else {
-            console.log('Color validation passed, form will submit');
         }
     });
 });
@@ -706,7 +720,7 @@ function saveSupplier() {
     
     // Validate required fields
     if (!formData.get('supplier_name').trim()) {
-        alert('Supplier name is required!');
+        showNotification('Supplier name is required!', 'warning');
         return;
     }
     
@@ -732,14 +746,13 @@ function saveSupplier() {
             bootstrap.Modal.getInstance(document.getElementById('addSupplierModal')).hide();
             
             // Show success message
-            alert('Supplier added successfully!');
+            showNotification('Supplier added successfully!', 'success');
         } else {
-            alert('Error: ' + data.message);
+            showNotification('Error: ' + data.message, 'error');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while adding supplier');
+        showNotification('An error occurred while adding supplier', 'error');
     });
 }
 </script>

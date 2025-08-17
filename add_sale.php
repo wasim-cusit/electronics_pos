@@ -241,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
 
 // Fetch customers and products for dropdowns
 $customers = $pdo->query("SELECT * FROM customer ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-$products = $pdo->query("SELECT p.*, COALESCE(SUM(si.quantity), 0) as stock_quantity, ROUND(COALESCE(AVG(si.sale_price), 0), 2) as sale_price, ROUND(COALESCE(AVG(si.purchase_price), 0), 2) as purchase_price FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' GROUP BY p.id ORDER BY p.product_name")->fetchAll(PDO::FETCH_ASSOC);
+$products = $pdo->query("SELECT p.*, COALESCE(SUM(si.quantity), 0) as stock_quantity, ROUND(COALESCE(SUM(si.quantity * si.sale_price) / SUM(si.quantity), 0), 2) as sale_price, ROUND(COALESCE(SUM(si.quantity * si.purchase_price) / SUM(si.quantity), 0), 2) as purchase_price FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' GROUP BY p.id ORDER BY p.product_name")->fetchAll(PDO::FETCH_ASSOC);
 $payment_methods = $pdo->query("SELECT * FROM payment_method WHERE status = 1 ORDER BY method")->fetchAll(PDO::FETCH_ASSOC);
 
 include 'includes/header.php';
@@ -542,6 +542,34 @@ include 'includes/header.php';
 </div>
 
 <script>
+    // Notification function to replace alerts
+    function showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+        notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        
+        notification.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+        
+        // Allow manual close
+        notification.querySelector('.btn-close').addEventListener('click', () => {
+            notification.remove();
+        });
+    }
+
     document.getElementById('addItem').addEventListener('click', function() {
         const container = document.getElementById('saleItems');
         const newRow = container.children[0].cloneNode(true);
@@ -711,12 +739,12 @@ include 'includes/header.php';
                 const customInput = select.closest('.sale-item-row').querySelector('.custom-color-input');
 
                 if (!customInput.value.trim()) {
-                    alert(`Please enter a custom color name for item ${index + 1}`);
+                    showNotification(`Please enter a custom color name for item ${index + 1}`, 'warning');
                     isValid = false;
                     return;
                 }
             } else if (select.value === '') {
-                alert(`Please select a color for item ${index + 1}`);
+                showNotification(`Please select a color for item ${index + 1}`, 'warning');
                 isValid = false;
                 return;
             }
@@ -1026,9 +1054,9 @@ include 'includes/header.php';
         if (!isValid) {
             e.preventDefault();
             if (!paymentMethod.value) {
-                alert('Please select a payment method.');
+                showNotification('Please select a payment method.', 'warning');
             } else {
-                alert('Please ensure all Sale Price fields have valid values greater than 0.');
+                showNotification('Please ensure all Sale Price fields have valid values greater than 0.', 'warning');
             }
             return false;
         }
@@ -1056,10 +1084,10 @@ include 'includes/header.php';
                     modal.hide();
                     form.reset();
                 } else {
-                    alert(data.error || 'Failed to add customer.');
+                    showNotification(data.error || 'Failed to add customer.', 'error');
                 }
             })
-            .catch(() => alert('Failed to add customer.'));
+            .catch(() => showNotification('Failed to add customer.', 'error'));
     });
 </script>
 

@@ -774,6 +774,34 @@ include 'includes/header.php';
 </div>
 
 <script>
+// Notification function to replace alerts
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+    
+    // Allow manual close
+    notification.querySelector('.btn-close').addEventListener('click', () => {
+        notification.remove();
+    });
+}
+
 document.getElementById('addItem').addEventListener('click', function() {
     const container = document.getElementById('orderItems');
     const newRow = container.children[0].cloneNode(true);
@@ -900,7 +928,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if customer is selected
         if (!customerSelect.value) {
             e.preventDefault();
-            alert('Please select a customer before creating an order.');
+            showNotification('Please select a customer before creating an order.', 'warning');
             document.getElementById('customerDropdownBtn').focus();
             return;
         }
@@ -909,7 +937,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (customerSelect.value === 'walk_in') {
             if (!walkInNameField.value.trim()) {
                 e.preventDefault();
-                alert('Please enter the walk-in customer name.');
+                showNotification('Please enter the walk-in customer name.', 'warning');
                 walkInNameField.focus();
                 return;
             }
@@ -917,7 +945,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Validate walk-in customer name length
             if (walkInNameField.value.trim().length < 2) {
                 e.preventDefault();
-                alert('Walk-in customer name must be at least 2 characters long.');
+                showNotification('Walk-in customer name must be at least 2 characters long.', 'warning');
                 walkInNameField.focus();
                 return;
             }
@@ -936,7 +964,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!hasValidItems) {
             e.preventDefault();
-            alert('Please add at least one order item with description, quantity, and unit price.');
+            showNotification('Please add at least one order item with description, quantity, and unit price.', 'warning');
             return;
         }
         
@@ -977,7 +1005,6 @@ async function updateCustomerBalance(customerId) {
       balanceInput.title = '';
     }
   } catch (error) {
-    console.error('Error fetching balance:', error);
     balanceInput.value = '0.00';
     balanceInput.classList.remove('text-danger', 'text-warning', 'fw-bold');
     balanceInput.title = '';
@@ -1056,7 +1083,6 @@ document.getElementById('addCustomerForm').addEventListener('submit', function(e
       }
     })
     .catch((error) => {
-      console.error('Error:', error);
       const errorAlert = document.createElement('div');
       errorAlert.className = 'alert alert-danger alert-dismissible fade show';
       errorAlert.innerHTML = `

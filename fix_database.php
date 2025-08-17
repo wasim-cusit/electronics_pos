@@ -142,24 +142,84 @@ try {
     // Step 6: Create stock_items table
     echo "<h2>6. Creating Stock Items Table</h2>";
     try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS `stock_items` (
-            `id` int(11) NOT NULL AUTO_INCREMENT,
-            `product_id` int(11) NOT NULL,
-            `purchase_item_id` int(11) DEFAULT NULL,
-            `product_code` varchar(100) NOT NULL,
-            `quantity` int(11) NOT NULL,
-            `purchase_price` decimal(15,2) NOT NULL,
-            `sale_price` decimal(15,2) NOT NULL,
-            `stock_date` date NOT NULL,
-            `status` enum('available','reserved','sold') NOT NULL DEFAULT 'available',
-            PRIMARY KEY (`id`),
-            KEY `product_id` (`product_id`),
-            KEY `product_code` (`product_code`),
-            CONSTRAINT `fk_stock_items_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
-        echo "✅ Stock items table created/verified<br>";
+        // First, check if table exists and has old structure
+        $stmt = $pdo->prepare("SHOW TABLES LIKE 'stock_items'");
+        $stmt->execute();
+        $table_exists = $stmt->fetch();
+        
+        if ($table_exists) {
+            // Check if we need to add missing columns
+            $stmt = $pdo->prepare("SHOW COLUMNS FROM stock_items LIKE 'created_at'");
+            $stmt->execute();
+            $has_created_at = $stmt->fetch();
+            
+            if (!$has_created_at) {
+                // Add missing columns to existing table
+                $pdo->exec("ALTER TABLE stock_items ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+                $pdo->exec("ALTER TABLE stock_items ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+                $pdo->exec("ALTER TABLE stock_items ADD COLUMN notes TEXT DEFAULT NULL");
+                echo "✅ Added missing columns to existing stock_items table<br>";
+            }
+        } else {
+            // Create new table with complete structure
+            $pdo->exec("CREATE TABLE `stock_items` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `product_id` int(11) NOT NULL,
+                `purchase_item_id` int(11) DEFAULT NULL,
+                `product_code` varchar(100) NOT NULL,
+                `quantity` decimal(15,3) NOT NULL,
+                `purchase_price` decimal(15,2) NOT NULL,
+                `sale_price` decimal(15,2) NOT NULL,
+                `stock_date` date NOT NULL,
+                `status` enum('available','reserved','sold') NOT NULL DEFAULT 'available',
+                `created_at` timestamp NOT NULL DEFAULT current_timestamp,
+                `updated_at` timestamp NOT NULL DEFAULT current_timestamp ON UPDATE current_timestamp,
+                `notes` text DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `product_id` (`product_id`),
+                KEY `product_code` (`product_code`),
+                KEY `status` (`status`),
+                CONSTRAINT `fk_stock_items_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+            echo "✅ Stock items table created with complete structure<br>";
+        }
+        
+        // Verify the table structure
+        $stmt = $pdo->prepare("DESCRIBE stock_items");
+        $stmt->execute();
+        $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        echo "✅ Stock items table columns: " . implode(', ', $columns) . "<br>";
+        
     } catch (Exception $e) {
         echo "❌ Error with stock_items: " . $e->getMessage() . "<br>";
+    }
+    
+    // Step 6.1: Create stock_movements table for tracking
+    echo "<h2>6.1. Creating Stock Movements Table</h2>";
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `stock_movements` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `stock_item_id` int(11) DEFAULT NULL,
+            `product_id` int(11) NOT NULL,
+            `movement_type` enum('added','sold','reserved','returned','adjusted') NOT NULL,
+            `quantity` decimal(15,3) NOT NULL,
+            `price` decimal(15,2) NOT NULL,
+            `movement_date` date NOT NULL,
+            `notes` text DEFAULT NULL,
+            `created_by` int(11) DEFAULT NULL,
+            `created_at` timestamp NOT NULL DEFAULT current_timestamp,
+            PRIMARY KEY (`id`),
+            KEY `stock_item_id` (`stock_item_id`),
+            KEY `product_id` (`product_id`),
+            KEY `movement_type` (`movement_type`),
+            KEY `movement_date` (`movement_date`),
+            CONSTRAINT `fk_stock_movements_stock_item` FOREIGN KEY (`stock_item_id`) REFERENCES `stock_items` (`id`) ON DELETE SET NULL,
+            CONSTRAINT `fk_stock_movements_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+            CONSTRAINT `fk_stock_movements_user` FOREIGN KEY (`created_by`) REFERENCES `system_users` (`id`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+        echo "✅ Stock movements table created/verified<br>";
+    } catch (Exception $e) {
+        echo "❌ Error with stock_movements: " . $e->getMessage() . "<br>";
     }
     
     // Step 7: Create customer table
