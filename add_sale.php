@@ -13,13 +13,70 @@ function get_next_sale_invoice_no($pdo) {
     return 'SALE-' . str_pad($next, 3, '0', STR_PAD_LEFT);
 }
 
+// Function to check if product has sufficient stock
+function check_product_stock($pdo, $product_id, $quantity) {
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(si.quantity), 0) as available_stock 
+                           FROM stock_items si 
+                           WHERE si.product_id = ? AND si.status = 'available'");
+    $stmt->execute([$product_id]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    return $result['available_stock'] >= $quantity;
+}
+
+// Function to get available stock items for a product
+function get_available_stock_items($pdo, $product_id, $quantity) {
+    $stmt = $pdo->prepare("SELECT si.id, si.quantity, si.purchase_price, si.sale_price, si.product_code
+                           FROM stock_items si 
+                           WHERE si.product_id = ? AND si.status = 'available' AND si.quantity > 0
+                           ORDER BY si.stock_date ASC, si.id ASC");
+    $stmt->execute([$product_id]);
+    $stock_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    $allocated_items = [];
+    $remaining_quantity = $quantity;
+    
+    // First, allocate from available stock
+    foreach ($stock_items as $item) {
+        if ($remaining_quantity <= 0) break;
+        
+        $allocated_qty = min($item['quantity'], $remaining_quantity);
+        $allocated_items[] = [
+            'stock_item_id' => $item['id'],
+            'quantity' => $allocated_qty,
+            'purchase_price' => $item['purchase_price'],
+            'sale_price' => $item['sale_price'],
+            'product_code' => $item['product_code']
+        ];
+        
+        $remaining_quantity -= $allocated_qty;
+    }
+    
+    // If there's still remaining quantity, we need to handle negative stock
+    if ($remaining_quantity > 0) {
+        // Get the first available stock item to use as base for negative stock
+        $base_stock_item = $stock_items[0] ?? null;
+        if ($base_stock_item) {
+            // Add negative stock entry
+            $allocated_items[] = [
+                'stock_item_id' => $base_stock_item['id'],
+                'quantity' => $remaining_quantity,
+                'purchase_price' => $base_stock_item['purchase_price'],
+                'sale_price' => $base_stock_item['sale_price'],
+                'product_code' => $base_stock_item['product_code']
+            ];
+        }
+    }
+    
+    return $allocated_items;
+}
+
 // Handle Add Sale
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
     $customer_id = $_POST['customer_id'];
     $walk_in_cust_name = $_POST['walk_in_cust_name'];
     $invoice_no = get_next_sale_invoice_no($pdo);
     $sale_date = $_POST['sale_date'];
-    $delivery_date = !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null;
     
     // Calculate subtotal from sale items
     $subtotal = 0;
@@ -44,81 +101,98 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
         if (empty(trim($walk_in_cust_name))) {
             $error = "Walk-in customer name is required when selecting walk-in customer.";
         } else {
-            $customer_id = null; // Use null for walk-in customers (database now supports this)
+            $customer_id = null; // Use null for walk-in customers
         }
     }
 
-    // If no error, proceed with the sale
+    // Note: Stock validation is now handled on the frontend with user confirmation
+    // Backend will allow negative stock as requested by user
+
+    // If no error, proceed with the sale using transaction
     if (!isset($error)) {
-        $after_discount = $subtotal - $discount;
-        $stmt = $pdo->prepare("INSERT INTO sale (customer_id, walk_in_cust_name, sale_no, sale_date, delivery_date, subtotal, discount, after_discount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$customer_id, $walk_in_cust_name, $invoice_no, $sale_date, $delivery_date, $subtotal, $discount, $after_discount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
-        $sale_id = $pdo->lastInsertId();
+        try {
+            $pdo->beginTransaction();
+            
+            $after_discount = $subtotal - $discount;
+            $stmt = $pdo->prepare("INSERT INTO sale (customer_id, walk_in_cust_name, sale_no, sale_date, subtotal, discount, after_discount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$customer_id, $walk_in_cust_name, $invoice_no, $sale_date, $subtotal, $discount, $after_discount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
+            $sale_id = $pdo->lastInsertId();
 
-        // Handle sale items
-        $product_ids = $_POST['product_id'];
-        $quantities = $_POST['quantity'];
-        $purchase_prices = $_POST['purchase_price'];
-        $unit_prices = $_POST['unit_price'];
-        $total_prices = $_POST['total_price'];
+            // Handle sale items
+            $product_ids = $_POST['product_id'];
+            $quantities = $_POST['quantity'];
+            $purchase_prices = $_POST['purchase_price'];
+            $unit_prices = $_POST['unit_price'];
+            $total_prices = $_POST['total_price'];
 
-        for ($i = 0; $i < count($product_ids); $i++) {
-            if (!empty($product_ids[$i])) {
-                try {
-                    // Get product details and stock item details
-                    $stmt = $pdo->prepare("SELECT p.product_name, si.id as stock_item_id, si.product_code, si.purchase_price, si.sale_price 
-                                          FROM products p 
-                                          JOIN stock_items si ON p.id = si.product_id 
-                                          WHERE p.id = ? AND si.status = 'available' AND si.quantity >= ? 
-                                          ORDER BY si.id ASC LIMIT 1");
-                    $stmt->execute([$product_ids[$i], $quantities[$i]]);
-                    $stock_item = $stmt->fetch(PDO::FETCH_ASSOC);
+            for ($i = 0; $i < count($product_ids); $i++) {
+                if (!empty($product_ids[$i])) {
+                    // Get available stock items for this product
+                    $stock_items = get_available_stock_items($pdo, $product_ids[$i], $quantities[$i]);
                     
-                    if ($stock_item) {
-                        $product_code = $stock_item['product_code'] ?: '';
-                        $stock_item_id = $stock_item['stock_item_id'];
-                        
-                        // Get category name for the product
-                        $stmt = $pdo->prepare("SELECT c.category FROM products p JOIN categories c ON p.category_id = c.id WHERE p.id = ?");
-                        $stmt->execute([$product_ids[$i]]);
-                        $category = $stmt->fetch(PDO::FETCH_ASSOC);
-                        $category_name = $category ? $category['category'] : '';
-                        
-                        $stmt = $pdo->prepare("INSERT INTO sale_items (sale_id, product_id, warehouse_id, product_code, price, stock_qty, quantity, total_price, category_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $stmt->execute([$sale_id, $product_ids[$i], 0, $product_code, $unit_prices[$i], $quantities[$i], $quantities[$i], $total_prices[$i], $category_name]);
-
-                        // Update stock - remove from stock_items using specific stock item ID
-                        $stmt = $pdo->prepare("UPDATE stock_items SET quantity = quantity - ? WHERE id = ?");
-                        $stmt->execute([$quantities[$i], $stock_item_id]);
-
-                        // Check for low stock and create notification if needed
-                        $stmt = $pdo->prepare("SELECT p.product_name, p.alert_quantity, COALESCE(SUM(si.quantity), 0) as current_stock FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' WHERE p.id = ? GROUP BY p.id");
+                    if ($stock_items) {
+                        // Get product details and category
+                        $stmt = $pdo->prepare("SELECT p.product_name, c.category 
+                                              FROM products p 
+                                              LEFT JOIN categories c ON p.category_id = c.id 
+                                              WHERE p.id = ?");
                         $stmt->execute([$product_ids[$i]]);
                         $product = $stmt->fetch(PDO::FETCH_ASSOC);
-                        if ($product && $product['current_stock'] <= $product['alert_quantity']) {
+                        $category_name = $product && $product['category'] ? $product['category'] : '';
+                        
+                        // Insert sale item
+                        $stmt = $pdo->prepare("INSERT INTO sale_items (sale_id, product_id, warehouse_id, product_code, price, stock_qty, quantity, total_price, category_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        $stmt->execute([$sale_id, $product_ids[$i], 0, $stock_items[0]['product_code'], $unit_prices[$i], $quantities[$i], $quantities[$i], $total_prices[$i], $category_name]);
+
+                        // Update stock items - allow negative stock as per user confirmation
+                        foreach ($stock_items as $stock_item) {
+                            $stmt = $pdo->prepare("UPDATE stock_items SET quantity = quantity - ? WHERE id = ?");
+                            $stmt->execute([$stock_item['quantity'], $stock_item['stock_item_id']]);
+                            
+                            // If stock becomes 0 or negative, mark as sold
+                            $stmt = $pdo->prepare("UPDATE stock_items SET status = 'sold' WHERE id = ? AND quantity <= 0");
+                            $stmt->execute([$stock_item['stock_item_id']]);
+                        }
+
+                        // Check for low stock and create notification if needed
+                        $stmt = $pdo->prepare("SELECT p.product_name, p.alert_quantity, COALESCE(SUM(si.quantity), 0) as current_stock 
+                                              FROM products p 
+                                              LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' 
+                                              WHERE p.id = ? 
+                                              GROUP BY p.id");
+                        $stmt->execute([$product_ids[$i]]);
+                        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        if ($product && $product['alert_quantity'] > 0 && $product['current_stock'] <= $product['alert_quantity']) {
                             $msg = 'Low stock alert: ' . $product['product_name'] . ' stock is ' . $product['current_stock'] . ' (threshold: ' . $product['alert_quantity'] . ')';
+                            
                             // Prevent duplicate unread notifications for this product and user
                             $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'Low Stock' AND message = ? AND is_read = 0");
                             $stmt->execute([$created_by, $msg]);
                             $exists = $stmt->fetchColumn();
+                            
                             if (!$exists) {
                                 $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message) VALUES (?, 'Low Stock', ?)");
                                 $stmt->execute([$created_by, $msg]);
                             }
                         }
                     } else {
-                        // Log error if no stock available
-                        error_log("No available stock found for product ID: " . $product_ids[$i] . " with quantity: " . $quantities[$i]);
+                        throw new Exception("Failed to allocate stock for product ID: " . $product_ids[$i]);
                     }
-                } catch (Exception $e) {
-                    // Log any database errors
-                    error_log("Error processing sale item: " . $e->getMessage());
                 }
             }
+            
+            $pdo->commit();
+            header("Location: add_sale.php?success=added&sale_id=" . $sale_id);
+            exit;
+            
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            error_log("Error in add_sale: " . $e->getMessage());
+            $error = "An error occurred while processing the sale. Please try again.";
+            header("Location: add_sale.php?error=" . urlencode($error));
+            exit;
         }
-
-        header("Location: add_sale.php?success=added&sale_id=" . $sale_id);
-        exit;
     } else {
         // If there was an error, redirect back to the form with error message
         header("Location: add_sale.php?error=" . urlencode($error));
@@ -128,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
 
 // Fetch customers and products for dropdowns
 $customers = $pdo->query("SELECT * FROM customer ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-$products = $pdo->query("SELECT p.*, COALESCE(SUM(si.quantity), 0) as stock_quantity, ROUND(COALESCE(AVG(si.sale_price), 0), 2) as sale_price, ROUND(COALESCE(AVG(si.purchase_price), 0), 2) as purchase_price FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' GROUP BY p.id HAVING stock_quantity > 0 ORDER BY p.product_name")->fetchAll(PDO::FETCH_ASSOC);
+$products = $pdo->query("SELECT p.*, COALESCE(SUM(si.quantity), 0) as stock_quantity, ROUND(COALESCE(AVG(si.sale_price), 0), 2) as sale_price, ROUND(COALESCE(AVG(si.purchase_price), 0), 2) as purchase_price FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' GROUP BY p.id ORDER BY p.product_name")->fetchAll(PDO::FETCH_ASSOC);
 $payment_methods = $pdo->query("SELECT * FROM payment_method WHERE status = 1 ORDER BY method")->fetchAll(PDO::FETCH_ASSOC);
 
 include 'includes/header.php';
@@ -139,9 +213,6 @@ include 'includes/header.php';
         <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0"><i class="bi bi-cart-plus text-primary"></i> Add New Sale</h2>
-                <a href="sales.php" class="btn btn-secondary">
-                    <i class="bi bi-list-ul"></i> View Sales History
-                </a>
             </div>
 
             <?php if (isset($_GET['success'])): ?>
@@ -174,13 +245,27 @@ include 'includes/header.php';
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label fw-bold">Customer <span class="text-danger">*</span></label>
-                                <select name="customer_id" id="customerSelect" class="form-select" required>
-                                    <option value="">Select Customer</option>
-                                    <option value="walk_in">🚶 Walk-in Customer</option>
-                                    <?php foreach ($customers as $customer): ?>
-                                        <option value="<?= $customer['id'] ?>">👤 <?= htmlspecialchars($customer['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
+                                <div class="customer-dropdown-container">
+                                    <button type="button" class="customer-dropdown-btn" id="customerDropdownBtn">
+                                        <span class="customer-selected-text">Select Customer</span>
+                                        <i class="bi bi-chevron-down dropdown-arrow"></i>
+                                    </button>
+                                    <div class="customer-dropdown-list" id="customerDropdownList">
+                                        <div class="customer-search-box">
+                                            <input type="text" id="customerSearchInput" class="form-control form-control-sm" placeholder="🔍 Search customers...">
+                                        </div>
+                                        <div class="customer-dropdown-separator"></div>
+                                        <div class="customer-option" data-value="walk_in">
+                                            🚶 Walk-in Customer
+                                        </div>
+                                        <?php foreach ($customers as $customer): ?>
+                                            <div class="customer-option" data-value="<?= $customer['id'] ?>">
+                                                👤 <?= htmlspecialchars($customer['name']) ?>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <input type="hidden" name="customer_id" id="customerSelect" required>
+                                </div>
                             </div>
                             <div class="mb-3" id="walkInCustomerField" style="display: none; width: 18%;">
                                 <label class="form-label fw-bold">Walk-in Customer Name <span class="text-danger">*</span></label>
@@ -190,10 +275,7 @@ include 'includes/header.php';
                                 <label class="form-label fw-bold">Sale Date <span class="text-danger">*</span></label>
                                 <input type="date" name="sale_date" class="form-control" required value="<?= date('Y-m-d') ?>">
                             </div>
-                            <div class="mb-3" style="width: 16%;">
-                                <label class="form-label fw-bold">Delivery Date <small class="text-muted">(Optional)</small></label>
-                                <input type="date" name="delivery_date" class="form-control">
-                            </div>
+
                             <div class="col-md-3 mb-3" style="margin-top: 30px;">
                                 <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
                                     <i class="bi bi-person-plus"></i> Add New Customer
@@ -220,25 +302,26 @@ include 'includes/header.php';
                                                             data-sale-price="<?= $product['sale_price'] > 0 ? $product['sale_price'] : 0 ?>"
                                                             data-purchase-price="<?= $product['purchase_price'] > 0 ? $product['purchase_price'] : 0 ?>">
                                                         📦 <?= htmlspecialchars($product['product_name']) ?> 
-                                                        <span class="text-muted">(Stock: <?= $product['stock_quantity'] ?>)</span>
+                                                                                                                 <span class="<?= $product['stock_quantity'] >= 0 ? 'text-muted' : 'text-danger' ?>">(Stock: <?= $product['stock_quantity'] >= 0 ? $product['stock_quantity'] : '0 (Backorder: ' . abs($product['stock_quantity']) . ')' ?>)</span>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
-                                        <div style="width:13%">
+                                        <div style="width:13%" class="quantity-container">
                                             <label class="form-label small fw-bold">Qty <span class="text-danger">*</span></label>
                                             <input type="number" step="0.01" name="quantity[]" class="form-control quantity" placeholder="Qty" required min="0.01">
+                                            <!-- Stock indicator will be dynamically added here -->
                                         </div>
                                         <div style="width:13%">
-                                            <label class="form-label small fw-bold">Purchase Price</label>
+                                            <label class="form-label fw-bold">Purchase Price</label>
                                             <input type="number" step="0.01" name="purchase_price[]" class="form-control purchase-price" placeholder="P.Price" readonly>
                                         </div>
                                         <div style="width:13%">
-                                            <label class="form-label small fw-bold">Sale Price <span class="text-danger">*</span></label>
+                                            <label class="form-label fw-bold">Sale Price <span class="text-danger">*</span></label>
                                             <input type="number" step="0.01" name="unit_price[]" class="form-control unit-price" placeholder="S.Price" required min="0.01">
                                         </div>
                                         <div style="width:13%">
-                                            <label class="form-label small fw-bold">Total</label>
+                                            <label class="form-label fw-bold">Total</label>
                                             <input type="number" step="0.01" name="total_price[]" class="form-control total-price" placeholder="Total" readonly>
                                         </div>
                                         <div class="col-md-2">
@@ -412,6 +495,14 @@ document.getElementById('addItem').addEventListener('click', function() {
     // Clear all input values in the new row
     newRow.querySelectorAll('input, select').forEach(input => input.value = '');
     
+    // Remove any existing stock indicators - COMMENTED OUT
+    /*
+    const stockIndicator = newRow.querySelector('.stock-indicator');
+    if (stockIndicator) {
+        stockIndicator.remove();
+    }
+    */
+    
     // Ensure the remove button has the correct class and event handling
     const removeBtn = newRow.querySelector('.remove-item');
     if (removeBtn) {
@@ -433,16 +524,101 @@ document.addEventListener('click', function(e) {
         const itemRow = removeBtn.closest('.sale-item-row');
         
         if (document.querySelectorAll('.sale-item-row').length > 1) {
+            // Clear stock indicators before removing - COMMENTED OUT
+            /*
+            const stockIndicator = itemRow.querySelector('.stock-indicator');
+            if (stockIndicator) {
+                stockIndicator.remove();
+            }
+            */
+            
             itemRow.remove();
             updateTotals(); // Update totals after removing item
         }
     }
 });
 
-// Handle customer selection change
-document.getElementById('customerSelect').addEventListener('change', function() {
+// Initialize customer dropdown functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const dropdownBtn = document.getElementById('customerDropdownBtn');
+    const dropdownList = document.getElementById('customerDropdownList');
+    const customerSelect = document.getElementById('customerSelect');
+    const customerSearchInput = document.getElementById('customerSearchInput');
+    const selectedText = document.querySelector('.customer-selected-text');
+    
+    // Toggle dropdown on click
+    dropdownBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dropdownList.classList.toggle('show');
+        dropdownBtn.classList.toggle('active');
+        
+        if (dropdownList.classList.contains('show')) {
+            customerSearchInput.focus();
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!dropdownBtn.contains(e.target) && !dropdownList.contains(e.target)) {
+            dropdownList.classList.remove('show');
+            dropdownBtn.classList.remove('active');
+        }
+    });
+    
+    // Handle customer option selection
+    dropdownList.addEventListener('click', function(e) {
+        const customerOption = e.target.closest('.customer-option');
+        if (customerOption) {
+            const value = customerOption.dataset.value;
+            const text = customerOption.textContent;
+            
+            // Update hidden input and display text
+            customerSelect.value = value;
+            selectedText.textContent = text;
+            
+            // Update visual selection
+            dropdownList.querySelectorAll('.customer-option').forEach(item => {
+                item.classList.remove('selected');
+            });
+            customerOption.classList.add('selected');
+            
+            // Close dropdown
+            dropdownList.classList.remove('show');
+            dropdownBtn.classList.remove('active');
+            
+            // Handle customer selection
+            handleCustomerSelection(value);
+        }
+    });
+    
+    // Handle search functionality
+    customerSearchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const customerOptions = dropdownList.querySelectorAll('.customer-option');
+        
+        customerOptions.forEach(option => {
+            const optionText = option.textContent.toLowerCase();
+            if (optionText.includes(searchTerm) || option.dataset.value === 'walk_in') {
+                option.classList.remove('hidden');
+            } else {
+                option.classList.add('hidden');
+            }
+        });
+    });
+    
+    // Clear search when dropdown opens
+    dropdownBtn.addEventListener('click', function() {
+        customerSearchInput.value = '';
+        dropdownList.querySelectorAll('.customer-option').forEach(option => {
+            option.classList.remove('hidden');
+        });
+    });
+});
+
+// Function to handle customer selection changes
+function handleCustomerSelection(customerId) {
     const walkInField = document.getElementById('walkInCustomerField');
-    if (this.value === 'walk_in') {
+    if (customerId === 'walk_in') {
         walkInField.style.display = 'block';
         walkInField.querySelector('input').required = true;
     } else {
@@ -450,7 +626,7 @@ document.getElementById('customerSelect').addEventListener('change', function() 
         walkInField.querySelector('input').required = false;
         walkInField.querySelector('input').value = '';
     }
-});
+}
 
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('product-select')) {
@@ -458,10 +634,12 @@ document.addEventListener('change', function(e) {
         const option = e.target.options[e.target.selectedIndex];
         const unitPrice = row.querySelector('.unit-price');
         const purchasePrice = row.querySelector('.purchase-price');
+        const quantity = row.querySelector('.quantity');
         
         // Get prices and round them to 2 decimal places
         const salePrice = parseFloat(option.dataset.salePrice) || 0;
         const purchasePriceValue = parseFloat(option.dataset.purchasePrice) || 0;
+        const availableStock = parseInt(option.dataset.stock) || 0;
         
         // Don't auto-fill sale price - leave it empty for user input
         unitPrice.value = '';
@@ -470,6 +648,45 @@ document.addEventListener('change', function(e) {
         // Clear total price since sale price is empty
         const totalPrice = row.querySelector('.total-price');
         totalPrice.value = '';
+        
+        // Set max quantity to available stock (allow negative stock)
+        quantity.max = availableStock >= 0 ? availableStock : 999999; // Allow any quantity for backordered items
+        
+        // Add stock indicator - COMMENTED OUT
+        /*
+        let stockIndicator = row.querySelector('.stock-indicator');
+        if (!stockIndicator) {
+            stockIndicator = document.createElement('small');
+            stockIndicator.className = 'stock-indicator text-muted d-block mb-1';
+            // Find the quantity field's container div and insert the stock indicator at the beginning
+            const quantityContainer = quantity.closest('.quantity-container');
+            if (quantityContainer) {
+                // Insert the stock indicator before the label
+                const label = quantityContainer.querySelector('label');
+                if (label) {
+                    quantityContainer.insertBefore(stockIndicator, label);
+                } else {
+                    quantityContainer.appendChild(stockIndicator);
+                }
+            }
+        }
+        
+        if (option.value && availableStock > 0) {
+            if (availableStock <= 5) {
+                stockIndicator.textContent = `⚠️ Low Stock: ${availableStock} remaining`;
+                stockIndicator.className = 'stock-indicator text-warning d-block mt-1';
+            } else {
+                stockIndicator.textContent = `Available Stock: ${availableStock}`;
+                stockIndicator.className = 'stock-indicator text-success d-block mt-1';
+            }
+        } else if (option.value && availableStock <= 0) {
+            stockIndicator.textContent = '❌ Out of Stock';
+            stockIndicator.className = 'stock-indicator text-danger d-block mt-1';
+        } else {
+            stockIndicator.textContent = '';
+            stockIndicator.className = 'stock-indicator d-none';
+        }
+        */
         
         // Update totals
         updateTotals();
@@ -482,11 +699,38 @@ document.addEventListener('input', function(e) {
         const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
         const unitPrice = parseFloat(row.querySelector('.unit-price').value) || 0;
         const totalPrice = row.querySelector('.total-price');
+        const productSelect = row.querySelector('.product-select');
+        const selectedOption = productSelect.options[productSelect.selectedIndex];
         
-        if (quantity > 0 && unitPrice > 0) {
-            totalPrice.value = (quantity * unitPrice).toFixed(2);
-        } else {
-            totalPrice.value = '';
+        // Validate quantity against available stock
+        if (selectedOption && selectedOption.value) {
+            const availableStock = parseInt(selectedOption.dataset.stock) || 0;
+            if (quantity <= 0) {
+                row.querySelector('.quantity').setCustomValidity('Quantity must be greater than 0');
+                row.querySelector('.quantity').classList.add('is-invalid');
+                totalPrice.value = '';
+            } else if (availableStock >= 0 && quantity > availableStock) {
+                // Show warning but don't block - user can proceed if they want
+                row.querySelector('.quantity').setCustomValidity(`⚠️ Warning: Quantity exceeds available stock (${availableStock}). This will result in negative stock.`);
+                row.querySelector('.quantity').classList.add('is-warning');
+                row.querySelector('.quantity').classList.remove('is-invalid');
+                
+                if (quantity > 0 && unitPrice > 0) {
+                    totalPrice.value = (quantity * unitPrice).toFixed(2);
+                } else {
+                    totalPrice.value = '';
+                }
+            } else {
+                row.querySelector('.quantity').setCustomValidity('');
+                row.querySelector('.quantity').classList.remove('is-invalid');
+                row.querySelector('.quantity').classList.remove('is-warning');
+                
+                if (quantity > 0 && unitPrice > 0) {
+                    totalPrice.value = (quantity * unitPrice).toFixed(2);
+                } else {
+                    totalPrice.value = '';
+                }
+            }
         }
         
         // Update totals
@@ -507,17 +751,7 @@ document.getElementById('paymentMethod').addEventListener('change', function() {
     }
 });
 
-// Handle delivery date field - make it optional and allow clearing
-document.querySelector('input[name="delivery_date"]').addEventListener('change', function() {
-    // Allow empty delivery date - this field is optional
-    if (this.value === '') {
-        this.classList.remove('is-invalid');
-        this.classList.remove('is-valid');
-    } else {
-        this.classList.remove('is-invalid');
-        this.classList.add('is-valid');
-    }
-});
+
 
 // Format all numeric fields on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -527,6 +761,19 @@ document.addEventListener('DOMContentLoaded', function() {
             field.value = parseFloat(field.value).toFixed(2);
         }
     });
+    
+    // Handle form reset to clear stock indicators - COMMENTED OUT
+    /*
+    const resetButton = document.querySelector('button[type="reset"]');
+    if (resetButton) {
+        resetButton.addEventListener('click', function() {
+            setTimeout(() => {
+                const stockIndicators = document.querySelectorAll('.stock-indicator');
+                stockIndicators.forEach(indicator => indicator.remove());
+            }, 100);
+        });
+    }
+    */
 });
 
 function updateTotals() {
@@ -574,19 +821,47 @@ document.getElementById('saleForm').addEventListener('submit', function(e) {
         }
     });
     
-    // Validate all sale price fields
+    // Validate all sale price fields and stock quantities
     const salePriceFields = document.querySelectorAll('.unit-price');
+    const quantityFields = document.querySelectorAll('.quantity');
+    const productSelects = document.querySelectorAll('.product-select');
     let isValid = true;
+    let stockError = false;
+    let stockWarningItems = [];
     
-    salePriceFields.forEach(field => {
-        const value = parseFloat(field.value);
-        if (!value || value <= 0) {
-            field.classList.add('is-invalid');
-            isValid = false;
-        } else {
-            field.classList.remove('is-invalid');
+    // Check each product row
+    for (let i = 0; i < productSelects.length; i++) {
+        const productSelect = productSelects[i];
+        const quantity = parseFloat(quantityFields[i].value) || 0;
+        const unitPrice = parseFloat(salePriceFields[i].value) || 0;
+        
+        if (productSelect.value && quantity > 0) {
+            const selectedOption = productSelect.options[productSelect.selectedIndex];
+            const availableStock = parseInt(selectedOption.dataset.stock) || 0;
+            const productName = selectedOption.textContent.split('📦')[1]?.split('(')[0]?.trim() || 'Unknown Product';
+            
+            // Validate stock
+            if (availableStock >= 0 && quantity > availableStock) {
+                stockWarningItems.push({
+                    product: productName,
+                    requested: quantity,
+                    available: availableStock
+                });
+                stockError = true;
+            } else {
+                quantityFields[i].setCustomValidity('');
+                quantityFields[i].classList.remove('is-invalid');
+            }
+            
+            // Validate sale price
+            if (!unitPrice || unitPrice <= 0) {
+                salePriceFields[i].classList.add('is-invalid');
+                isValid = false;
+            } else {
+                salePriceFields[i].classList.remove('is-invalid');
+            }
         }
-    });
+    }
     
     // Validate payment method is selected
     const paymentMethod = document.getElementById('paymentMethod');
@@ -595,6 +870,47 @@ document.getElementById('saleForm').addEventListener('submit', function(e) {
         isValid = false;
     } else {
         paymentMethod.classList.remove('is-invalid');
+    }
+    
+    // If there are stock warnings, show confirmation dialog
+    if (stockError && stockWarningItems.length > 0) {
+        e.preventDefault();
+        
+        let warningMessage = '⚠️ STOCK WARNING ⚠️\n\n';
+        warningMessage += 'The following items exceed available stock:\n\n';
+        
+        stockWarningItems.forEach(item => {
+            warningMessage += `• ${item.product}\n`;
+            warningMessage += `  Requested: ${item.requested}\n`;
+            warningMessage += `  Available: ${item.available}\n`;
+            warningMessage += `  Shortage: ${item.requested - item.available}\n\n`;
+        });
+        
+        warningMessage += '⚠️ This will result in NEGATIVE STOCK!\n\n';
+        warningMessage += 'Do you want to proceed with the sale anyway?';
+        
+        if (!confirm(warningMessage)) {
+            // User cancelled, highlight the problematic fields
+            stockWarningItems.forEach((item, index) => {
+                const row = productSelects[index].closest('.sale-item-row');
+                if (row) {
+                    const quantityField = row.querySelector('.quantity');
+                    quantityField.classList.add('is-invalid');
+                    quantityField.setCustomValidity(`Quantity exceeds available stock (${item.available})`);
+                }
+            });
+            return false;
+        } else {
+            // User confirmed, clear validation errors and proceed
+            stockWarningItems.forEach((item, index) => {
+                const row = productSelects[index].closest('.sale-item-row');
+                if (row) {
+                    const quantityField = row.querySelector('.quantity');
+                    quantityField.classList.remove('is-invalid');
+                    quantityField.setCustomValidity('');
+                }
+            });
+        }
     }
     
     if (!isValid) {
@@ -642,18 +958,33 @@ document.getElementById('addCustomerForm').addEventListener('submit', function(e
 <style>
 /* Custom styles for the sales form */
 .sale-item-row {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 8px;
-    border: 1px solid #dee2e6;
-    margin-bottom: 15px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    padding: 20px;
+    border-radius: 12px;
+    border: 2px solid #e9ecef;
+    margin-bottom: 20px;
     transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.sale-item-row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #007bff, #28a745, #ffc107);
+    opacity: 0.7;
 }
 
 .sale-item-row:hover {
-    background-color: #e9ecef;
-    border-color: #adb5bd;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: linear-gradient(135deg, #ffffff 0%, #f1f3f4 100%);
+    border-color: #007bff;
+    box-shadow: 0 4px 16px rgba(0,123,255,0.15);
+    transform: translateY(-2px);
 }
 
 .form-label.fw-bold {
@@ -759,6 +1090,23 @@ document.getElementById('addCustomerForm').addEventListener('submit', function(e
     box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
 }
 
+.form-control.is-warning {
+    border-color: #ffc107;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+    background-color: rgba(255, 193, 7, 0.05);
+}
+
+.form-control.is-warning:focus {
+    border-color: #ffc107;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+    background-color: rgba(255, 193, 7, 0.05);
+}
+
+.form-control.is-warning:hover {
+    border-color: #e0a800;
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
 /* Enhanced modal styles */
 .modal-header.bg-primary {
     border-bottom: 2px solid #0056b3;
@@ -786,4 +1134,145 @@ document.getElementById('addCustomerForm').addEventListener('submit', function(e
     background-color: #f8d7da;
     color: #721c24;
 }
+
+/* Stock indicator styles */
+.stock-indicator {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background-color: rgba(0,0,0,0.05);
+    margin-bottom: 8px;
+    display: block;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.quantity-container {
+    position: relative;
+    padding-top: 8px;
+}
+
+.stock-indicator.text-success {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: #155724 !important;
+}
+
+.stock-indicator.text-danger {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #721c24 !important;
+}
+
+.stock-indicator.text-warning {
+    background-color: rgba(255, 193, 7, 0.1);
+    color: #856404 !important;
+}
+
+.stock-indicator.text-muted {
+    background-color: rgba(108, 117, 125, 0.1);
+    color: #6c757d !important;
+}
+
+/* Customer dropdown styling */
+.customer-dropdown-container {
+    position: relative;
+    width: 100%;
+}
+
+.customer-dropdown-btn {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #212529;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    text-align: left;
+}
+
+.customer-dropdown-btn:hover {
+    border-color: #86b7fe;
+}
+
+.customer-dropdown-btn:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.dropdown-arrow {
+    transition: transform 0.2s ease;
+}
+
+.customer-dropdown-btn.active .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.customer-dropdown-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: none;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 2px;
+}
+
+.customer-dropdown-list.show {
+    display: block;
+}
+
+.customer-search-box {
+    padding: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.customer-search-box input {
+    width: 100%;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.customer-dropdown-separator {
+    height: 1px;
+    background-color: #dee2e6;
+    margin: 0;
+}
+
+.customer-option {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.customer-option:hover {
+    background-color: #f8f9fa;
+}
+
+.customer-option.selected {
+    background-color: #0d6efd;
+    color: #fff;
+}
+
+.customer-option.hidden {
+    display: none;
+}
 </style>
+

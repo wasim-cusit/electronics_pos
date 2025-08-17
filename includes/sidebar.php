@@ -170,6 +170,49 @@ if (is_logged_in()) {
           <i class="bi bi-receipt me-2"></i>Expenses
         </a>
       </li>
+      <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'order' || $activePage === 'add_order' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#ordersSubmenu" aria-expanded="<?= $activePage === 'order' || $activePage === 'add_order' ? 'true' : 'false' ?>" aria-controls="ordersSubmenu">
+          <i class="bi bi-clipboard-data me-2"></i>Orders
+          <i class="bi bi-chevron-right ms-auto"></i>
+        </a>
+        <div class="collapse<?= $activePage === 'order' || $activePage === 'add_order' ? ' show' : '' ?>" id="ordersSubmenu">
+          <ul class="nav flex-column ms-3">
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'add_order' ? ' active' : '' ?>" href="<?= $base_url ?>add_order.php">
+                <i class="bi bi-plus-circle me-2"></i>Add Order
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'order' ? ' active' : '' ?>" href="<?= $base_url ?>order.php">
+                <i class="bi bi-list-ul me-2"></i>Order Details
+              </a>
+            </li>
+          </ul>
+        </div>
+      </li>
+      
+      <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'unit' || $activePage === 'add_unit' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#unitsSubmenu" aria-expanded="<?= $activePage === 'unit' || $activePage === 'add_unit' ? 'true' : 'false' ?>" aria-controls="unitsSubmenu">
+          <i class="bi bi-rulers me-2"></i>Unit Prices
+          <i class="bi bi-chevron-right ms-auto"></i>
+        </a>
+        <div class="collapse<?= $activePage === 'unit' || $activePage === 'add_unit' ? ' show' : '' ?>" id="unitsSubmenu">
+          <ul class="nav flex-column ms-3">
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'add_unit' ? ' active' : '' ?>" href="<?= $base_url ?>add_unit.php">
+                <i class="bi bi-plus-circle me-2"></i>Add Unit Price
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'unit' ? ' active' : '' ?>" href="<?= $base_url ?>unit.php">
+                <i class="bi bi-list-ul me-2"></i>View Unit Prices
+              </a>
+            </li>
+          </ul>
+        </div>
+      </li>
+      
+   
     </ul>
     <ul class="nav flex-column mb-4">
       <li class="nav-item mb-2">
@@ -180,6 +223,11 @@ if (is_logged_in()) {
               <?= $unread_count ?>
             </span>
           <?php endif; ?>
+        </a>
+      </li>
+      <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'daily_books' ? ' active' : '' ?>" href="<?= $base_url ?>daily_books.php">
+          <i class="bi bi-journal-text me-2"></i>Daily Books
         </a>
       </li>
       <li class="nav-item mb-2">

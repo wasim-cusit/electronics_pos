@@ -90,9 +90,9 @@ include 'includes/header.php'; ?>
         <main class="col-md-10 ms-sm-auto px-4 py-5" 5" style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0">Purchases</h2>
-                <a href="add_purchase.php" class="btn btn-primary">
+                <!-- <a href="add_purchase.php" class="btn btn-primary">
                     <i class="bi bi-plus-circle"></i> Add New Purchase
-                </a>
+                </a> -->
             </div>
 
             <?php if (isset($_GET['success'])): ?>
@@ -134,7 +134,9 @@ include 'includes/header.php'; ?>
                                     </td>
                                     <td>
                                         <i class="bi bi-person-badge me-1"></i>
-                                        <?= htmlspecialchars($purchase['supplier_name']) ?>
+                                        <a href="purchase_details.php?id=<?= $purchase['id'] ?>" class="text-decoration-none text-primary fw-medium" title="Click to view purchase details">
+                                            <?= htmlspecialchars($purchase['supplier_name']) ?>
+                                        </a>
                                     </td>
                                     <td>
                                         <div class="d-flex flex-column">

@@ -19,7 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
     $walk_in_cust_name = $_POST['walk_in_cust_name'];
     $invoice_no = get_next_sale_invoice_no($pdo);
     $sale_date = $_POST['sale_date'];
-    $delivery_date = !empty($_POST['delivery_date']) ? $_POST['delivery_date'] : null;
     // Calculate subtotal from sale items
     $subtotal = 0;
     if (isset($_POST['total_price']) && is_array($_POST['total_price'])) {
@@ -50,8 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
     // If no error, proceed with the sale
     if (!isset($error)) {
         $after_discount = $subtotal - $discount;
-        $stmt = $pdo->prepare("INSERT INTO sale (customer_id, walk_in_cust_name, sale_no, sale_date, delivery_date, subtotal, discount, after_discount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$customer_id, $walk_in_cust_name, $invoice_no, $sale_date, $delivery_date, $subtotal, $discount, $after_discount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
+        $stmt = $pdo->prepare("INSERT INTO sale (customer_id, walk_in_cust_name, sale_no, sale_date, subtotal, discount, after_discount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$customer_id, $walk_in_cust_name, $invoice_no, $sale_date, $subtotal, $discount, $after_discount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
         $sale_id = $pdo->lastInsertId();
 
         // Handle sale items
@@ -165,9 +164,9 @@ include 'includes/header.php';
         <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0"><i class="bi bi-list-ul text-primary"></i> Sales History</h2>
-                <a href="add_sale.php" class="btn btn-primary">
+                <!-- <a href="add_sale.php" class="btn btn-primary">
                     <i class="bi bi-cart-plus"></i> Add New Sale
-                </a>
+                </a> -->
             </div>
 
             <?php if (isset($_GET['success'])): ?>
@@ -202,8 +201,7 @@ include 'includes/header.php';
                                 <th><i class="bi bi-receipt"></i> Invoice No</th>
                                 <th><i class="bi bi-person"></i> Customer</th>
                                 <th><i class="bi bi-calendar-event"></i> Sale Date</th>
-                                                                 <th><i class="bi bi-calendar-check"></i> Delivery Date</th>
-                                 <th><i class="bi bi-percent"></i> Discount</th>
+                                <th><i class="bi bi-percent"></i> Discount</th>
                                 <th><i class="bi bi-calculator"></i> After Discount</th>
                                 <th><i class="bi bi-currency-dollar"></i> Total Amount</th>
                                 <th><i class="bi bi-cash"></i> Paid Amount</th>
@@ -229,14 +227,6 @@ include 'includes/header.php';
                                         <i class="bi bi-calendar-event"></i> 
                                         <?= date('d M Y', strtotime($sale['sale_date'])) ?>
                                     </td>
-                                                                         <td>
-                                         <?php if ($sale['delivery_date']): ?>
-                                             <i class="bi bi-calendar-check text-success"></i> 
-                                             <?= date('d M Y', strtotime($sale['delivery_date'])) ?>
-                                         <?php else: ?>
-                                             <span class="text-muted">-</span>
-                                         <?php endif; ?>
-                                     </td>
                                     <td>
                                         <?php if ($sale['discount'] > 0): ?>
                                             <span class="badge bg-warning text-dark">
@@ -303,7 +293,7 @@ include 'includes/header.php';
                             <?php endforeach; ?>
                             <?php if (empty($sales)): ?>
                                 <tr>
-                                    <td colspan="13" class="text-center py-5">
+                                    <td colspan="12" class="text-center py-5">
                                         <div class="text-muted">
                                             <i class="bi bi-cart-x fs-1"></i>
                                             <h5 class="mt-3">No sales found</h5>

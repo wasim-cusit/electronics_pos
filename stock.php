@@ -14,6 +14,7 @@ $stock_query = "
         p.product_unit,
         p.alert_quantity,
         p.description,
+        p.color,
         c.category,
         COALESCE(SUM(si.quantity), 0) as total_stock,
         COALESCE(SUM(CASE WHEN si.status = 'available' THEN si.quantity ELSE 0 END), 0) as available_stock,
@@ -26,7 +27,7 @@ $stock_query = "
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN stock_items si ON p.id = si.product_id
-    GROUP BY p.id, p.product_name, p.product_code, p.product_unit, p.alert_quantity, p.description, c.category, p.status, p.created_at
+    GROUP BY p.id, p.product_name, p.product_code, p.product_unit, p.alert_quantity, p.description, p.color, c.category, p.status, p.created_at
     ORDER BY p.product_name
 ";
 
@@ -154,7 +155,7 @@ include 'includes/header.php';
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($stock_items as $index => $item): ?>
-                                        <tr class="<?= $item['total_stock'] <= $item['alert_quantity'] && $item['total_stock'] > 0 ? 'table-warning' : ($item['total_stock'] == 0 ? 'table-danger' : '') ?>">
+                                        <tr class="<?= $item['total_stock'] <= $item['alert_quantity'] && $item['total_stock'] > 0 ? 'table-warning' : ($item['total_stock'] == 0 ? 'table-danger' : 'table-light') ?>">
                                             <td><?= $index + 1 ?></td>
                                             <td>
                                                 <strong><?= htmlspecialchars($item['product_name']) ?></strong>
@@ -165,29 +166,30 @@ include 'includes/header.php';
                                                                     <td><code><?= htmlspecialchars($item['product_code']) ?></code></td>
                         <td>
                             <?php if (!empty($item['color'])): ?>
-                                <span class="badge bg-light text-dark border">
-                                    <?= htmlspecialchars($item['color']) ?>
-                                </span>
+                                <div class="d-flex align-items-center">
+                                    <div class="color-swatch me-2" style="background-color: <?= htmlspecialchars($item['color']) ?>; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #dee2e6;"></div>
+                                    <span class="color-name"><?= htmlspecialchars($item['color']) ?></span>
+                                </div>
                             <?php else: ?>
-                                <span class="text-muted">No color specified</span>
+                                <span class="text-muted">—</span>
                             <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars($item['category']) ?></td>
                                             <td><?= htmlspecialchars($item['product_unit']) ?></td>
                                             <td>
-                                                <span class="badge bg-info"><?= $item['alert_quantity'] ?></span>
+                                                <span class="badge bg-info text-white px-3 py-2"><?= $item['alert_quantity'] ?></span>
                                             </td>
                                             <td>
-                                                <span class="badge bg-primary fs-6"><?= $item['total_stock'] ?></span>
+                                                <span class="badge bg-primary text-white fs-6 px-3 py-2"><?= $item['total_stock'] ?></span>
                                             </td>
                                             <td>
-                                                <span class="badge bg-success"><?= $item['available_stock'] ?></span>
+                                                <span class="badge bg-success text-white px-3 py-2"><?= $item['available_stock'] ?></span>
                                             </td>
                                             <td>
-                                                <span class="badge bg-warning"><?= $item['reserved_stock'] ?></span>
+                                                <span class="badge bg-warning text-dark px-3 py-2"><?= $item['reserved_stock'] ?></span>
                                             </td>
                                             <td>
-                                                <span class="badge bg-secondary"><?= $item['sold_stock'] ?></span>
+                                                <span class="badge bg-secondary text-white px-3 py-2"><?= $item['sold_stock'] ?></span>
                                             </td>
                                             <td>
                                                 <span class="text-success"><?= number_format($item['avg_purchase_price'], 2) ?> PKR </span>
@@ -197,11 +199,11 @@ include 'includes/header.php';
                                             </td>
                                             <td>
                                                 <?php if ($item['total_stock'] == 0): ?>
-                                                    <span class="badge bg-danger">Out of Stock</span>
+                                                    <span class="badge bg-danger text-white px-3 py-2">Out of Stock</span>
                                                 <?php elseif ($item['total_stock'] <= $item['alert_quantity']): ?>
-                                                    <span class="badge bg-warning">Low Stock</span>
+                                                    <span class="badge bg-warning text-dark px-3 py-2">Low Stock</span>
                                                 <?php else: ?>
-                                                    <span class="badge bg-success">In Stock</span>
+                                                    <span class="badge bg-success text-white px-3 py-2">In Stock</span>
                                                 <?php endif; ?>
                                             </td>
                                             <td>
@@ -337,14 +339,14 @@ function exportToCSV() {
     const table = document.getElementById('stockTable');
     const rows = table.querySelectorAll('tbody tr');
     
-    let csv = 'S.No,Product,Product Code,Category,Unit,Alert Quantity,Total Stock,Available,Reserved,Sold,Avg Purchase Price,Avg Sale Price,Status\n';
+    let csv = 'S.No,Product,Product Code,Color,Category,Unit,Alert Quantity,Total Stock,Available,Reserved,Sold,Avg Purchase Price,Avg Sale Price,Status\n';
     
     rows.forEach((row, index) => {
         const cells = row.querySelectorAll('td');
         if (cells.length > 1) { // Skip empty rows
             const rowData = [];
             cells.forEach((cell, cellIndex) => {
-                if (cellIndex < 12) { // Exclude Actions column
+                if (cellIndex < 14) { // Exclude Actions column, include Color column
                     let text = cell.textContent.trim();
                     // Remove HTML tags and clean up
                     text = text.replace(/<[^>]*>/g, '');
@@ -371,3 +373,157 @@ function printStock() {
 </script>
 
 <?php include 'includes/footer.php'; ?>
+
+<style>
+/* Enhanced stock table styling */
+.table {
+    font-size: 0.9rem;
+}
+
+.table th {
+    background-color: #343a40 !important;
+    color: white !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: none;
+}
+
+.table td {
+    vertical-align: middle;
+    padding: 12px 8px;
+}
+
+/* Color swatch styling */
+.color-swatch {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+.color-swatch:hover {
+    transform: scale(1.1);
+}
+
+.color-name {
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Badge improvements */
+.badge {
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border-radius: 6px;
+}
+
+.badge.bg-primary {
+    background-color: #007bff !important;
+}
+
+.badge.bg-success {
+    background-color: #28a745 !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.badge.bg-info {
+    background-color: #17a2b8 !important;
+}
+
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+/* Table row hover effects */
+.table-hover tbody tr:hover {
+    background-color: rgba(0,123,255,0.05) !important;
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+}
+
+/* Summary cards improvements */
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.card.bg-primary {
+    background: linear-gradient(135deg, #007bff, #0056b3) !important;
+}
+
+.card.bg-success {
+    background: linear-gradient(135deg, #28a745, #1e7e34) !important;
+}
+
+.card.bg-warning {
+    background: linear-gradient(135deg, #ffc107, #e0a800) !important;
+}
+
+.card.bg-danger {
+    background: linear-gradient(135deg, #dc3545, #c82333) !important;
+}
+
+/* Button improvements */
+.btn-outline-primary:hover {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.btn-outline-info:hover {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+    color: white;
+}
+
+.btn-outline-success:hover {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.8rem;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        padding: 4px 8px !important;
+    }
+    
+    .color-swatch {
+        width: 16px !important;
+        height: 16px !important;
+    }
+}
+
+/* Print styles */
+@media print {
+    .btn-toolbar,
+    .btn-group,
+    .modal {
+        display: none !important;
+    }
+    
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #dee2e6 !important;
+    }
+}
+</style>

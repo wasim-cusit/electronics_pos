@@ -52,8 +52,8 @@ try {
     $month_expenses = 0;
     foreach ($expenses as $expense) {
         $total_expenses += $expense['amount'];
-        if ($expense['date'] == date('Y-m-d')) $today_expenses += $expense['amount'];
-        if (date('Y-m', strtotime($expense['date'])) == date('Y-m')) $month_expenses += $expense['amount'];
+        if ($expense['exp_date'] == date('Y-m-d')) $today_expenses += $expense['amount'];
+        if (date('Y-m', strtotime($expense['exp_date'])) == date('Y-m')) $month_expenses += $expense['amount'];
     }
 } catch (Exception $e) {
     $expenses = [];

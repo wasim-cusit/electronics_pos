@@ -81,12 +81,24 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Supplier *</label>
-                                <select name="supplier_id" class="form-control" required>
-                                    <option value="">Select Supplier</option>
-                                    <?php foreach ($suppliers as $supplier): ?>
-                                        <option value="<?= $supplier['id'] ?>"><?= htmlspecialchars($supplier['supplier_name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
+                                <div class="supplier-dropdown-container">
+                                    <button type="button" class="supplier-dropdown-btn" id="supplierDropdownBtn">
+                                        <span class="supplier-selected-text">Select Supplier</span>
+                                        <i class="bi bi-chevron-down dropdown-arrow"></i>
+                                    </button>
+                                    <div class="supplier-dropdown-list" id="supplierDropdownList">
+                                        <div class="supplier-search-box">
+                                            <input type="text" id="supplierSearchInput" class="form-control form-control-sm" placeholder="🔍 Search suppliers...">
+                                        </div>
+                                        <div class="supplier-dropdown-separator"></div>
+                                        <?php foreach ($suppliers as $supplier): ?>
+                                            <div class="supplier-option" data-value="<?= $supplier['id'] ?>">
+                                                🏢 <?= htmlspecialchars($supplier['supplier_name']) ?>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <input type="hidden" name="supplier_id" id="supplierSelect" required>
+                                </div>
                             </div>
                             <div class="col-md-2 mb-3">
                                 <label class="form-label">Payment Amount *</label>
@@ -135,7 +147,184 @@ include 'includes/header.php';
     </div>
 </div>
 
+<style>
+/* Supplier dropdown styling */
+.supplier-dropdown-container {
+    position: relative;
+    width: 100%;
+}
+
+.supplier-dropdown-btn {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #212529;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    text-align: left;
+}
+
+.supplier-dropdown-btn:hover {
+    border-color: #86b7fe;
+}
+
+.supplier-dropdown-btn:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.dropdown-arrow {
+    transition: transform 0.2s ease;
+}
+
+.supplier-dropdown-btn.active .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.supplier-dropdown-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: none;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 2px;
+}
+
+.supplier-dropdown-list.show {
+    display: block;
+}
+
+.supplier-search-box {
+    padding: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.supplier-search-box input {
+    width: 100%;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.supplier-dropdown-separator {
+    height: 1px;
+    background-color: #dee2e6;
+    margin: 0;
+}
+
+.supplier-option {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.supplier-option:hover {
+    background-color: #f8f9fa;
+}
+
+.supplier-option.selected {
+    background-color: #0d6efd;
+    color: #fff;
+}
+
+.supplier-option.hidden {
+    display: none;
+}
+</style>
+
 <script>
+// Initialize supplier dropdown functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const dropdownBtn = document.getElementById('supplierDropdownBtn');
+    const dropdownList = document.getElementById('supplierDropdownList');
+    const supplierSelect = document.getElementById('supplierSelect');
+    const supplierSearchInput = document.getElementById('supplierSearchInput');
+    const selectedText = document.querySelector('.supplier-selected-text');
+    
+    // Toggle dropdown on click
+    dropdownBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dropdownList.classList.toggle('show');
+        dropdownBtn.classList.toggle('active');
+        
+        if (dropdownList.classList.contains('show')) {
+            supplierSearchInput.focus();
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!dropdownBtn.contains(e.target) && !dropdownList.contains(e.target)) {
+            dropdownList.classList.remove('show');
+            dropdownBtn.classList.remove('active');
+        }
+    });
+    
+    // Handle supplier option selection
+    dropdownList.addEventListener('click', function(e) {
+        const supplierOption = e.target.closest('.supplier-option');
+        if (supplierOption) {
+            const value = supplierOption.dataset.value;
+            const text = supplierOption.textContent;
+            
+            // Update hidden input and display text
+            supplierSelect.value = value;
+            selectedText.textContent = text;
+            
+            // Update visual selection
+            dropdownList.querySelectorAll('.supplier-option').forEach(item => {
+                item.classList.remove('selected');
+            });
+            supplierOption.classList.add('selected');
+            
+            // Close dropdown
+            dropdownList.classList.remove('show');
+            dropdownBtn.classList.remove('active');
+        }
+    });
+    
+    // Handle search functionality
+    supplierSearchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const supplierOptions = dropdownList.querySelectorAll('.supplier-option');
+        
+        supplierOptions.forEach(option => {
+            const optionText = option.textContent.toLowerCase();
+            if (optionText.includes(searchTerm)) {
+                option.classList.remove('hidden');
+            } else {
+                option.classList.add('hidden');
+            }
+        });
+    });
+    
+    // Clear search when dropdown opens
+    dropdownBtn.addEventListener('click', function() {
+        supplierSearchInput.value = '';
+        dropdownList.querySelectorAll('.supplier-option').forEach(option => {
+            option.classList.remove('hidden');
+        });
+    });
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     // Form validation
     document.getElementById('paymentForm').addEventListener('submit', function(e) {

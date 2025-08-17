@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_product'])) {
     $low_stock_threshold = $_POST['low_stock_threshold'];
     $description = trim($_POST['description'] ?? '');
     $product_code = trim($_POST['product_code']);
+    $color = trim($_POST['color'] ?? '');
 
     // Validate required fields
     if (empty($name) || empty($category_id) || empty($unit) || empty($low_stock_threshold)) {
@@ -24,8 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_product'])) {
         $brand = $brand ?: 'Generic';
 
         try {
-            $stmt = $pdo->prepare("UPDATE products SET product_name=?, category_id=?, product_unit=?, brand=?, alert_quantity=?, description=?, product_code=? WHERE id=?");
-            $stmt->execute([$name, $category_id, $unit, $brand, $low_stock_threshold, $description, $product_code, $id]);
+            $stmt = $pdo->prepare("UPDATE products SET product_name=?, category_id=?, product_unit=?, brand=?, alert_quantity=?, description=?, product_code=?, color=? WHERE id=?");
+            $stmt->execute([$name, $category_id, $unit, $brand, $low_stock_threshold, $description, $product_code, $color, $id]);
             header("Location: add_product.php?success=updated&product_id=" . $id);
             exit;
         } catch (Exception $e) {
@@ -43,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
     $low_stock_threshold = $_POST['low_stock_threshold'];
     $description = trim($_POST['description'] ?? '');
     $product_code = trim($_POST['product_code']);
+    $color = trim($_POST['color'] ?? '');
 
     // Validate required fields
     if (empty($name) || empty($category_id) || empty($unit) || empty($low_stock_threshold)) {
@@ -55,8 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
             $pdo->beginTransaction();
             
             // Insert product
-            $stmt = $pdo->prepare("INSERT INTO products (product_name, category_id, product_unit, brand, alert_quantity, description, product_code) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$name, $category_id, $unit, $brand, $low_stock_threshold, $description, $product_code]);
+            $stmt = $pdo->prepare("INSERT INTO products (product_name, category_id, product_unit, brand, alert_quantity, description, product_code, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $category_id, $unit, $brand, $low_stock_threshold, $description, $product_code, $color]);
             $product_id = $pdo->lastInsertId();
             
             $pdo->commit();
@@ -94,9 +96,9 @@ include 'includes/header.php';
                     <!-- <a href="products.php" class="btn btn-info me-2">
                         <i class="bi bi-eye"></i> Product Details
                     </a> -->
-                    <a href="products.php" class="btn btn-secondary">
+                    <!-- <a href="products.php" class="btn btn-secondary">
                         <i class="bi bi-list-ul"></i> View All Products
-                    </a>
+                    </a> -->
                 </div>
             </div>
 
@@ -148,10 +150,14 @@ include 'includes/header.php';
                                     <option value="set" <?= (isset($edit_product['product_unit']) && $edit_product['product_unit'] == 'set') ? 'selected' : '' ?>>Set</option>
                                 </select>
                             </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label class="form-label">Product Code</label>
                                 <input type="text" name="product_code" class="form-control" placeholder="Enter product code or barcode" value="<?= htmlspecialchars($edit_product['product_code'] ?? '') ?>">
-
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label class="form-label">Color</label>
+                                <input type="text" name="color" class="form-control" placeholder="Enter color (e.g., Red, Blue, Black)" value="<?= htmlspecialchars($edit_product['color'] ?? '') ?>">
+                                <small class="text-muted">Specify product color</small>
                             </div>
                         </div>
 

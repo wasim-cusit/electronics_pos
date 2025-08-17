@@ -15,9 +15,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     // Get form data
     $name = trim($_POST['name'] ?? '');
-    $contact = trim($_POST['contact'] ?? '');
+    $mobile = trim($_POST['mobile'] ?? '');
     $address = trim($_POST['address'] ?? '');
     $email = trim($_POST['email'] ?? '');
+    $opening_balance = (float)($_POST['opening_balance'] ?? 0.00);
     
     // Validate required fields
     if (empty($name)) {
@@ -25,17 +26,27 @@ try {
         exit;
     }
     
-    // Check if customer already exists
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM customer WHERE name = ?");
-    $stmt->execute([$name]);
+    if (empty($mobile)) {
+        echo json_encode(['success' => false, 'error' => 'Mobile number is required']);
+        exit;
+    }
+    
+    if (empty($address)) {
+        echo json_encode(['success' => false, 'error' => 'Address is required']);
+        exit;
+    }
+    
+    // Check if customer already exists (by name or mobile)
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM customer WHERE name = ? OR mobile = ?");
+    $stmt->execute([$name, $mobile]);
     if ($stmt->fetchColumn() > 0) {
-        echo json_encode(['success' => false, 'error' => 'Customer with this name already exists']);
+        echo json_encode(['success' => false, 'error' => 'Customer with this name or mobile number already exists']);
         exit;
     }
     
     // Insert new customer
-    $stmt = $pdo->prepare("INSERT INTO customer (name, mobile, address, email, status, created_at) VALUES (?, ?, ?, ?, 1, NOW())");
-    $stmt->execute([$name, $contact, $address, $email]);
+    $stmt = $pdo->prepare("INSERT INTO customer (name, mobile, address, email, opening_balance, status, created_at) VALUES (?, ?, ?, ?, ?, 1, NOW())");
+    $stmt->execute([$name, $mobile, $address, $email, $opening_balance]);
     
     $customer_id = $pdo->lastInsertId();
     
@@ -45,9 +56,10 @@ try {
         'customer' => [
             'id' => $customer_id,
             'name' => $name,
-            'contact' => $contact,
+            'mobile' => $mobile,
             'address' => $address,
-            'email' => $email
+            'email' => $email,
+            'opening_balance' => $opening_balance
         ]
     ]);
     
