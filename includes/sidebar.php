@@ -241,6 +241,11 @@ if (is_logged_in()) {
           <i class="bi bi-graph-up-arrow me-2"></i>Reports
         </a>
       </li>
+      <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'backup' ? ' active' : '' ?>" href="<?= $base_url ?>backup.php">
+          <i class="bi bi-cloud-arrow-up me-2"></i>System Backup
+        </a>
+      </li>
       <?php if (function_exists('has_role') && has_role('Admin')): ?>
         <li class="nav-item mb-2">
           <a class="nav-link<?= $activePage === 'users' ? ' active' : '' ?>" href="<?= $base_url ?>users.php">
