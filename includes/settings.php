@@ -14,6 +14,14 @@ function get_setting($key, $default = '') {
     global $pdo;
     
     try {
+        // First check if settings table exists
+        $stmt = $pdo->query("SHOW TABLES LIKE 'settings'");
+        if ($stmt->rowCount() == 0) {
+            // Settings table doesn't exist, return default
+            return $default;
+        }
+        
+        // Query the settings table
         $stmt = $pdo->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
         $stmt->execute([$key]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -25,29 +33,38 @@ function get_setting($key, $default = '') {
         
         // If no result, return default
         return $default;
+        
     } catch (Exception $e) {
-        // Fallback to system_settings table for backward compatibility
-        try {
-            $stmt = $pdo->prepare("SELECT company_name, company_address, company_phone, company_email, company_logo, currency FROM system_settings LIMIT 1");
-            $stmt->execute();
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($result) {
-                $fallback_map = [
-                    'company_name' => $result['company_name'],
-                    'company_address' => $result['company_address'],
-                    'company_phone' => $result['company_phone'],
-                    'company_email' => $result['company_email'],
-                    'company_logo' => $result['company_logo'],
-                    'currency_symbol' => $result['currency']
-                ];
+        // Log the error for debugging
+        error_log("Error in get_setting for key '{$key}': " . $e->getMessage());
+        
+        // Only fallback to system_settings for specific legacy keys
+        $legacy_keys = ['company_name', 'company_address', 'company_phone', 'company_email', 'company_logo', 'currency_symbol'];
+        
+        if (in_array($key, $legacy_keys)) {
+            try {
+                $stmt = $pdo->prepare("SELECT company_name, company_address, company_phone, company_email, company_logo, currency FROM system_settings LIMIT 1");
+                $stmt->execute();
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
                 
-                if (isset($fallback_map[$key]) && $fallback_map[$key] !== null) {
-                    return $fallback_map[$key];
+                if ($result) {
+                    $fallback_map = [
+                        'company_name' => $result['company_name'],
+                        'company_address' => $result['company_address'],
+                        'company_phone' => $result['company_phone'],
+                        'company_email' => $result['company_email'],
+                        'company_logo' => $result['company_logo'],
+                        'currency_symbol' => $result['currency']
+                    ];
+                    
+                    if (isset($fallback_map[$key]) && $fallback_map[$key] !== null) {
+                        return $fallback_map[$key];
+                    }
                 }
+            } catch (Exception $e2) {
+                // If fallback also fails, return default
+                error_log("Fallback error in get_setting for key '{$key}': " . $e2->getMessage());
             }
-        } catch (Exception $e2) {
-            // If both fail, return default
         }
         
         return $default;
@@ -65,7 +82,14 @@ function set_setting($key, $value, $description = '') {
     global $pdo;
     
     try {
-        // First try to insert into the new settings table
+        // First check if settings table exists
+        $stmt = $pdo->query("SHOW TABLES LIKE 'settings'");
+        if ($stmt->rowCount() == 0) {
+            // Settings table doesn't exist, create it
+            create_settings_table();
+        }
+        
+        // Insert or update the setting
         $stmt = $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, setting_description) 
             VALUES (?, ?, ?) 
@@ -76,15 +100,119 @@ function set_setting($key, $value, $description = '') {
         ");
         
         if ($stmt->execute([$key, $value, $description])) {
-            // Also update system_settings table for backward compatibility
-            update_system_settings_backward_compatibility($key, $value);
+            // Also update system_settings table for backward compatibility (only for legacy keys)
+            $legacy_keys = ['company_name', 'company_address', 'company_phone', 'company_email', 'company_logo', 'currency_symbol'];
+            if (in_array($key, $legacy_keys)) {
+                update_system_settings_backward_compatibility($key, $value);
+            }
+            return true;
+        }
+        
+        return false;
+        
+    } catch (Exception $e) {
+        error_log("Error in set_setting for key '{$key}': " . $e->getMessage());
+        
+        // Only fallback to system_settings for specific legacy keys
+        $legacy_keys = ['company_name', 'company_address', 'company_phone', 'company_email', 'company_logo', 'currency_symbol'];
+        if (in_array($key, $legacy_keys)) {
+            return update_system_settings_backward_compatibility($key, $value);
+        }
+        
+        return false;
+    }
+}
+
+/**
+ * Create the settings table if it doesn't exist
+ * @return bool Success status
+ */
+function create_settings_table() {
+    global $pdo;
+    
+    try {
+        // Create settings table
+        $sql = "CREATE TABLE IF NOT EXISTS `settings` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `setting_key` varchar(255) NOT NULL,
+            `setting_value` text,
+            `setting_description` text,
+            `setting_type` varchar(50) DEFAULT 'text',
+            `setting_group` varchar(100) DEFAULT 'general',
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `setting_key` (`setting_key`),
+            KEY `setting_group` (`setting_group`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
+        
+        if ($pdo->exec($sql)) {
+            // Insert default settings if table is empty
+            $stmt = $pdo->query("SELECT COUNT(*) FROM settings");
+            $count = $stmt->fetchColumn();
+            
+            if ($count == 0) {
+                $default_settings = [
+                    ['company_name', 'WASEM WEARS', 'Company/Business Name'],
+                    ['company_tagline', 'Professional Tailoring Services', 'Company Tagline or Description'],
+                    ['company_phone', '+92 323 9507813', 'Company Phone Number'],
+                    ['company_email', 'info@tailorshop.com', 'Company Email Address'],
+                    ['company_address', 'Address shop #1 hameed plaza main university road Pakistan', 'Company Address'],
+                    ['company_website', 'www.tailorshop.com', 'Company Website'],
+                    ['company_logo', '', 'Company Logo URL (optional)'],
+                    ['currency_symbol', 'PKR', 'Currency Symbol'],
+                    ['currency_name', 'Pakistani Rupee', 'Currency Name'],
+                    ['invoice_prefix', 'INV', 'Invoice Number Prefix'],
+                    ['purchase_prefix', 'PUR', 'Purchase Invoice Prefix'],
+                    ['sale_prefix', 'SALE', 'Sale Invoice Prefix'],
+                    ['footer_text', 'Thank you for your business!', 'Footer Text for Invoices'],
+                    ['print_header', 'Computer Generated Invoice', 'Print Header Text'],
+                    ['low_stock_threshold', '10', 'Low Stock Alert Threshold'],
+                    ['business_hours', '9:00 AM - 6:00 PM', 'Business Hours'],
+                    ['business_days', 'Monday - Saturday', 'Business Days'],
+                    ['date_format', 'd/m/Y', 'Date Format'],
+                    ['time_format', 'H:i:s', 'Time Format'],
+                    ['auto_backup', '1', 'Enable Auto Backup'],
+                    ['backup_frequency', 'weekly', 'Backup Frequency'],
+                    ['backup_retention', '30', 'Backup Retention Days'],
+                    ['backup_location', 'backups/', 'Backup Storage Location'],
+                    ['backup_type', 'full', 'Backup Type'],
+                    ['enable_notifications', '1', 'Enable Notifications System'],
+                    ['show_notification_badge', '1', 'Show Notification Badge'],
+                    ['email_notifications', '0', 'Enable Email Notifications'],
+                    ['smtp_server', 'smtp.gmail.com', 'SMTP Server'],
+                    ['smtp_port', '587', 'SMTP Port'],
+                    ['smtp_username', '', 'SMTP Username'],
+                    ['smtp_password', '', 'SMTP Password'],
+                    ['from_email', 'noreply@tailorshop.com', 'From Email Address'],
+                    ['sms_notifications', '0', 'Enable SMS Notifications'],
+                    ['sms_provider', 'twilio', 'SMS Provider'],
+                    ['sms_api_key', '', 'SMS API Key'],
+                    ['sms_api_secret', '', 'SMS API Secret'],
+                    ['low_stock_alerts', '1', 'Enable Low Stock Alerts'],
+                    ['payment_reminders', '1', 'Enable Payment Reminders'],
+                    ['order_status_updates', '1', 'Enable Order Status Updates'],
+                    ['delivery_reminders', '1', 'Enable Delivery Reminders'],
+                    ['notification_auto_hide', '5', 'Notification Auto-Hide Duration'],
+                    ['notification_position', 'top-right', 'Notification Position'],
+                    ['notification_sound', '0', 'Enable Notification Sounds'],
+                    ['notification_sound_type', 'default', 'Notification Sound Type']
+                ];
+                
+                $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value, setting_description) VALUES (?, ?, ?)");
+                
+                foreach ($default_settings as $setting) {
+                    $stmt->execute($setting);
+                }
+            }
+            
             return true;
         }
         
         return false;
     } catch (Exception $e) {
-        // If settings table doesn't exist, try to update system_settings
-        return update_system_settings_backward_compatibility($key, $value);
+        error_log("Error creating settings table: " . $e->getMessage());
+        return false;
     }
 }
 
@@ -542,5 +670,53 @@ function format_file_size($bytes) {
     } else {
         return $bytes . ' bytes';
     }
+}
+
+/**
+ * Debug function to check settings table status
+ * @return array Debug information
+ */
+function debug_settings_table() {
+    global $pdo;
+    
+    $debug = [];
+    
+    try {
+        // Check if settings table exists
+        $stmt = $pdo->query("SHOW TABLES LIKE 'settings'");
+        $debug['table_exists'] = $stmt->rowCount() > 0;
+        
+        if ($debug['table_exists']) {
+            // Get table structure
+            $stmt = $pdo->query("DESCRIBE settings");
+            $debug['structure'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Get settings count
+            $stmt = $pdo->query("SELECT COUNT(*) FROM settings");
+            $debug['settings_count'] = $stmt->fetchColumn();
+            
+            // Get sample settings
+            $stmt = $pdo->query("SELECT setting_key, setting_value FROM settings LIMIT 5");
+            $debug['sample_settings'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+        
+        // Check system_settings table
+        try {
+            $stmt = $pdo->query("SHOW TABLES LIKE 'system_settings'");
+            $debug['system_settings_exists'] = $stmt->rowCount() > 0;
+            
+            if ($debug['system_settings_exists']) {
+                $stmt = $pdo->query("SELECT COUNT(*) FROM system_settings");
+                $debug['system_settings_count'] = $stmt->fetchColumn();
+            }
+        } catch (Exception $e) {
+            $debug['system_settings_error'] = $e->getMessage();
+        }
+        
+    } catch (Exception $e) {
+        $debug['error'] = $e->getMessage();
+    }
+    
+    return $debug;
 }
 ?>

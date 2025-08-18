@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 17, 2025 at 07:42 PM
+-- Generation Time: Aug 18, 2025 at 02:03 PM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -199,7 +199,7 @@ CREATE TABLE `cloths_orders` (
 
 INSERT INTO `cloths_orders` (`id`, `order_no`, `customer_id`, `order_date`, `delivery_date`, `sub_total`, `discount`, `total_amount`, `paid_amount`, `remaining_amount`, `details`, `status`, `created_by`, `created_at`) VALUES
 (4, NULL, 1, '2025-08-13', '0000-00-00', 500.00, 0.00, 500.00, 500.00, 0.00, '', 'Pending', 3, '2025-08-13 09:25:00'),
-(5, NULL, 1, '2025-08-13', '0000-00-00', 250.00, 0.00, 250.00, 200.00, 50.00, '', 'Pending', 3, '2025-08-13 09:36:24'),
+(5, NULL, 1, '2025-08-13', '0000-00-00', 250.00, 0.00, 250.00, 200.00, 50.00, '', 'Completed', 3, '2025-08-13 09:36:24'),
 (7, NULL, 3, '2025-08-13', '0000-00-00', 2500.00, 0.00, 2500.00, 2000.00, 500.00, '', 'Pending', 3, '2025-08-13 12:28:27'),
 (8, NULL, 3, '2025-08-13', '0000-00-00', 2500.00, 0.00, 2500.00, 2400.00, 100.00, '', 'Pending', 3, '2025-08-13 13:18:34'),
 (9, NULL, 6, '2025-08-13', '0000-00-00', 7500.00, 0.00, 7500.00, 7300.00, 200.00, '', 'Pending', 3, '2025-08-13 13:20:48');
@@ -291,22 +291,17 @@ INSERT INTO `customer_payment` (`id`, `sale_id`, `customer_id`, `payment_method_
 
 CREATE TABLE `expenses` (
   `id` int(11) NOT NULL,
+  `company_id` int(11) NOT NULL DEFAULT 1,
   `cat_id` int(11) NOT NULL,
   `expense_person` varchar(100) NOT NULL,
   `amount` decimal(15,2) NOT NULL,
   `details` varchar(255) NOT NULL,
   `exp_date` date NOT NULL,
   `receipt` varchar(255) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `attachment_path` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `expenses`
---
-
-INSERT INTO `expenses` (`id`, `cat_id`, `expense_person`, `amount`, `details`, `exp_date`, `receipt`, `created_at`) VALUES
-(1, 6, 'Wasim', 12000.00, '', '2025-08-15', '', '2025-08-15 07:18:02'),
-(2, 3, 'Wasim', 12.00, 'check', '2025-08-16', '', '2025-08-15 07:18:31');
 
 -- --------------------------------------------------------
 
@@ -320,20 +315,21 @@ CREATE TABLE `expenses_category` (
   `expense_cat` varchar(200) NOT NULL,
   `description` text DEFAULT NULL,
   `status` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `expenses_category`
 --
 
-INSERT INTO `expenses_category` (`id`, `company_id`, `expense_cat`, `description`, `status`, `created_at`) VALUES
-(1, 1, 'Rent', 'Shop rent and utilities', 1, '2025-08-11 11:31:37'),
-(2, 1, 'Salaries', 'Employee salaries', 1, '2025-08-11 11:31:37'),
-(3, 1, 'Materials', 'Raw materials and supplies', 1, '2025-08-11 11:31:37'),
-(4, 1, 'Equipment', 'Equipment maintenance and repair', 1, '2025-08-11 11:31:37'),
-(5, 1, 'Marketing', 'Advertising and promotion', 1, '2025-08-11 11:31:37'),
-(6, 1, 'Other', 'Miscellaneous expenses', 1, '2025-08-11 11:31:37');
+INSERT INTO `expenses_category` (`id`, `company_id`, `expense_cat`, `description`, `status`, `created_at`, `updated_at`) VALUES
+(1, 1, 'Rent', 'Shop rent and utilities', 1, '2025-08-11 11:31:37', NULL),
+(2, 1, 'Salaries', 'Employee salaries', 1, '2025-08-11 11:31:37', NULL),
+(3, 1, 'Materials', 'Raw materials and supplies', 1, '2025-08-11 11:31:37', NULL),
+(4, 1, 'Equipment', 'Equipment maintenance and repair', 1, '2025-08-11 11:31:37', NULL),
+(5, 1, 'Marketing', 'Advertising and promotion', 1, '2025-08-11 11:31:37', NULL),
+(6, 1, 'Other', 'Miscellaneous expenses', 1, '2025-08-11 11:31:37', NULL);
 
 -- --------------------------------------------------------
 
@@ -368,7 +364,8 @@ INSERT INTO `notifications` (`id`, `user_id`, `title`, `message`, `type`, `is_re
 (10, 1, '', 'Low stock alert: alkaram cotan stock is 10 (threshold: 12)', '', 1, '2025-08-13 11:00:30'),
 (11, 1, '', 'Low stock alert: alkaram cotan stock is 8 (threshold: 12)', '', 1, '2025-08-13 11:20:58'),
 (12, 1, '', 'Low stock alert: Royal Tag stock is 23 (threshold: 23)', '', 1, '2025-08-14 10:37:59'),
-(13, 1, '', 'Low stock alert: Royal Tag stock is 2 (threshold: 23)', '', 1, '2025-08-14 13:15:25');
+(13, 1, '', 'Low stock alert: Royal Tag stock is 2 (threshold: 23)', '', 1, '2025-08-14 13:15:25'),
+(14, 1, '', 'Low stock alert: Royal Tag stock is 0 (threshold: 23)', '', 1, '2025-08-17 21:36:48');
 
 -- --------------------------------------------------------
 
@@ -485,7 +482,7 @@ CREATE TABLE `products` (
 --
 
 INSERT INTO `products` (`id`, `product_name`, `brand`, `product_unit`, `size`, `color`, `product_code`, `category_id`, `alert_quantity`, `description`, `product_image`, `status`, `created_at`) VALUES
-(21, 'Royal Tag', 'Junaid Jamshed', 'meter', NULL, NULL, '232', 1, 23, '', NULL, 1, '2025-08-14 10:37:04');
+(21, 'Royal Tag', 'Junaid Jamshed', 'meter', NULL, 'Green', '232', 1, 23, '', NULL, 1, '2025-08-14 10:37:04');
 
 -- --------------------------------------------------------
 
@@ -517,7 +514,8 @@ CREATE TABLE `purchase` (
 
 INSERT INTO `purchase` (`id`, `supplier_id`, `after_discount_purchase`, `purchase_date`, `purchase_no`, `subtotal`, `discount`, `total_amount`, `paid_amount`, `due_amount`, `payment_method_id`, `notes`, `status`, `created_by`, `created_at`) VALUES
 (12, 2, 0.00, '2025-08-14', 'INV-001', 529.00, 0.00, 529.00, 520.00, 9.00, 1, '', 'completed', 1, '2025-08-14 10:37:59'),
-(14, 2, 144.00, '2025-08-15', 'INV-013', 144.00, 0.00, 144.00, 0.00, 144.00, 0, '', 'completed', 1, '2025-08-15 07:51:04');
+(14, 2, 144.00, '2025-08-15', 'INV-013', 144.00, 0.00, 144.00, 0.00, 144.00, 0, '', 'completed', 1, '2025-08-15 07:51:04'),
+(16, 3, 0.00, '2025-08-18', 'INV-015', 529.00, 0.00, 529.00, 2343.00, -1814.00, 0, '', 'completed', 1, '2025-08-18 01:33:29');
 
 -- --------------------------------------------------------
 
@@ -543,7 +541,8 @@ CREATE TABLE `purchase_items` (
 
 INSERT INTO `purchase_items` (`id`, `purchase_id`, `product_id`, `product_code`, `color`, `purchase_price`, `sale_price`, `quantity`, `purchase_total`) VALUES
 (12, 12, 21, '232', '#000000', 23.00, 23.00, 23, 529.00),
-(14, 14, 21, '', '#000000', 12.00, 122.00, 12, 144.00);
+(14, 14, 21, '', '#000000', 12.00, 122.00, 12, 144.00),
+(16, 16, 21, '232', 'Blue', 23.00, 23.00, 23, 529.00);
 
 -- --------------------------------------------------------
 
@@ -561,6 +560,47 @@ CREATE TABLE `purchase_return` (
   `return_date` date NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `return_percale`
+--
+
+CREATE TABLE `return_percale` (
+  `id` int(11) NOT NULL,
+  `return_no` varchar(50) NOT NULL,
+  `return_type` enum('customer_return','supplier_return') NOT NULL DEFAULT 'customer_return',
+  `customer_id` int(11) DEFAULT NULL,
+  `supplier_id` int(11) DEFAULT NULL,
+  `order_id` int(11) DEFAULT NULL,
+  `purchase_id` int(11) DEFAULT NULL,
+  `product_id` int(11) DEFAULT NULL,
+  `fabric_name` varchar(255) NOT NULL,
+  `fabric_type` varchar(100) DEFAULT NULL,
+  `color` varchar(50) DEFAULT NULL,
+  `quantity` decimal(10,2) NOT NULL,
+  `unit` varchar(20) DEFAULT 'meters',
+  `original_price` decimal(15,2) NOT NULL,
+  `return_price` decimal(15,2) NOT NULL,
+  `return_reason` text DEFAULT NULL,
+  `return_date` date NOT NULL,
+  `status` enum('pending','approved','rejected','completed') NOT NULL DEFAULT 'pending',
+  `approved_by` int(11) DEFAULT NULL,
+  `approved_date` date DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_by` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `return_percale`
+--
+
+INSERT INTO `return_percale` (`id`, `return_no`, `return_type`, `customer_id`, `supplier_id`, `order_id`, `purchase_id`, `product_id`, `fabric_name`, `fabric_type`, `color`, `quantity`, `unit`, `original_price`, `return_price`, `return_reason`, `return_date`, `status`, `approved_by`, `approved_date`, `notes`, `created_by`, `created_at`, `updated_at`) VALUES
+(1, 'RET-001', 'customer_return', 4, NULL, NULL, NULL, NULL, 'Premium Cotton Percale', 'Cotton', 'White', 5.00, 'meters', 150.00, 120.00, 'Fabric quality not as expected', '2025-08-17', 'pending', NULL, NULL, 'Customer complaint about fabric texture', 1, '2025-08-17 22:32:48', '2025-08-17 23:03:27'),
+(2, 'RET-002', 'customer_return', 4, NULL, NULL, NULL, NULL, 'Silk Blend Percale', 'Silk', 'Blue', 3.50, 'meters', 200.00, 180.00, 'Color mismatch with order', '2025-08-17', 'rejected', 1, '2025-08-18', 'Supplier accepted return due to color variation', 1, '2025-08-17 22:32:48', '2025-08-17 23:04:14');
 
 -- --------------------------------------------------------
 
@@ -617,7 +657,8 @@ CREATE TABLE `sale` (
 --
 
 INSERT INTO `sale` (`id`, `customer_id`, `walk_in_cust_name`, `discount`, `after_discount`, `sale_date`, `expiry_date`, `sale_no`, `subtotal`, `total_amount`, `paid_amount`, `due_amount`, `payment_method_id`, `notes`, `status`, `delivery_date`, `created_by`, `created_at`) VALUES
-(13, NULL, 'ahmad', 0.00, 529.00, '2025-08-14', NULL, 'SALE-001', 529.00, 529.00, 500.00, 29.00, 1, 'next time they will be pay the charges', 'pending', NULL, 1, '2025-08-14 13:15:25');
+(13, NULL, 'ahmad', 0.00, 529.00, '2025-08-14', NULL, 'SALE-001', 529.00, 529.00, 500.00, 29.00, 1, 'next time they will be pay the charges', 'pending', NULL, 1, '2025-08-14 13:15:25'),
+(14, 4, '', 0.00, 275.54, '2025-08-17', NULL, 'SALE-014', 275.54, 275.54, 0.00, 275.54, 7, '', 'pending', NULL, 1, '2025-08-17 21:36:48');
 
 -- --------------------------------------------------------
 
@@ -644,7 +685,8 @@ CREATE TABLE `sale_items` (
 --
 
 INSERT INTO `sale_items` (`id`, `sale_id`, `product_id`, `warehouse_id`, `product_code`, `price`, `stock_qty`, `quantity`, `total_price`, `category_name`, `notes`) VALUES
-(11, 13, 21, 0, '232', 23.00, 23, 23, 529.00, 'Shirts', NULL);
+(11, 13, 21, 0, '232', 23.00, 23, 23, 529.00, 'Shirts', NULL),
+(12, 14, 21, 0, '', 23.00, 12, 12, 275.54, 'Shirts', 'Color: Yellow');
 
 -- --------------------------------------------------------
 
@@ -663,6 +705,55 @@ CREATE TABLE `sale_return` (
   `return_date` date NOT NULL DEFAULT current_timestamp(),
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `settings`
+--
+
+CREATE TABLE `settings` (
+  `id` int(11) NOT NULL,
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` text NOT NULL,
+  `setting_description` text DEFAULT NULL,
+  `setting_type` enum('text','number','select','textarea','boolean') DEFAULT 'text',
+  `setting_group` varchar(50) DEFAULT 'general',
+  `is_public` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `settings`
+--
+
+INSERT INTO `settings` (`id`, `setting_key`, `setting_value`, `setting_description`, `setting_type`, `setting_group`, `is_public`, `created_at`, `updated_at`) VALUES
+(85, 'company_name', 'WASEM WEARS', 'Company/Business Name', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(86, 'company_tagline', 'Professional Tailoring Services', 'Company Tagline or Description', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(87, 'company_phone', '+92 323 9507813', 'Company Phone Number', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(88, 'company_email', 'info@tailorshop.com', 'Company Email Address', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(89, 'company_address', 'Address shop #1 hameed plaza main university road Pakistan', 'Company Address', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(90, 'company_website', 'www.tailorshop.com', 'Company Website', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(91, 'company_logo', '', 'Company Logo URL (optional)', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(92, 'currency_symbol', 'PKR', 'Currency Symbol', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(93, 'currency_name', 'Pakistani Rupee', 'Currency Name', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(94, 'invoice_prefix', 'INV', 'Invoice Number Prefix', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(95, 'purchase_prefix', 'PUR', 'Purchase Invoice Prefix', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(96, 'sale_prefix', 'SALE', 'Sale Invoice Prefix', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(97, 'footer_text', 'Thank you for your business!', 'Footer Text for Invoices', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(98, 'print_header', 'Computer Generated Invoice', 'Print Header Text', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(99, 'low_stock_threshold', '10', 'Low Stock Alert Threshold', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(100, 'business_hours', '9:00 AM - 6:00 PM', 'Business Hours', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(101, 'business_days', 'Monday - Saturday', 'Business Days', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(102, 'date_format', 'd/m/Y', 'Date Format', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(103, 'time_format', 'H:i:s', 'Time Format', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(104, 'auto_backup', '1', 'Enable Auto Backup', 'text', 'general', 1, '2025-08-18 00:28:18', '2025-08-18 00:28:18'),
+(105, 'backup_frequency', 'weekly', 'Backup Frequency', 'text', 'general', 1, '2025-08-18 00:28:18', '2025-08-18 00:28:18'),
+(106, 'backup_retention', '60', 'Backup Retention Days', 'text', 'general', 1, '2025-08-18 00:28:18', '2025-08-18 00:28:18'),
+(107, 'backup_location', 'backups/', 'Backup location', 'text', 'general', 1, '2025-08-18 00:35:59', '2025-08-18 00:35:59'),
+(108, 'backup_type', 'full', 'Backup type', 'text', 'general', 1, '2025-08-18 00:35:59', '2025-08-18 00:35:59'),
+(109, 'last_backup_date', '2025-08-18 02:46:28', 'Last Backup Date', 'text', 'general', 1, '2025-08-18 00:37:04', '2025-08-18 00:46:28');
 
 -- --------------------------------------------------------
 
@@ -688,9 +779,11 @@ CREATE TABLE `stock_items` (
 --
 
 INSERT INTO `stock_items` (`id`, `product_id`, `purchase_item_id`, `product_code`, `color`, `quantity`, `purchase_price`, `sale_price`, `stock_date`, `status`) VALUES
-(1, 1, 0, 'TAILOR001', '#000000', 15, 60.00, 90.00, '2025-08-12', 'available'),
 (13, 21, 12, '232', '#000000', 0, 23.00, 23.00, '2025-08-14', 'available'),
-(15, 21, 14, '', '#000000', 12, 12.00, 122.00, '2025-08-15', 'available');
+(15, 21, 14, '', '#000000', 0, 12.00, 122.00, '2025-08-15', 'sold'),
+(17, 21, 0, '232-20250818-010', '#000000', 12, 33.00, 233.00, '2025-08-17', 'available'),
+(18, 21, 0, '232-20250818-208', '#000000', 23, 32.00, 222.00, '2025-08-17', 'available'),
+(19, 21, 16, '232', 'Blue', 23, 23.00, 23.00, '2025-08-18', 'available');
 
 -- --------------------------------------------------------
 
@@ -715,7 +808,8 @@ CREATE TABLE `supplier` (
 --
 
 INSERT INTO `supplier` (`id`, `supplier_name`, `supplier_contact`, `supplier_open_balance`, `supplier_address`, `supplier_email`, `status`, `created_at`, `opening_balance`) VALUES
-(2, 'Zubair Khan', '03341234567', 0.00, 'hayatabad\r\nDoctor Guest House', 'Zubair Khan', 1, '2025-08-14 10:34:58', 12.00);
+(2, 'Zubair Khan', '03341234567', 0.00, 'hayatabad\r\nDoctor Guest House', 'Zubair Khan', 1, '2025-08-14 10:34:58', 12.00),
+(3, 'Farman Khan', '+923342372772', 0.00, 'Doctor Guest House, Street 6, Phase 4, HMC, Hayatabad', 'z.r@gmail.com', 1, '2025-08-18 01:33:00', 0.00);
 
 -- --------------------------------------------------------
 
@@ -803,13 +897,6 @@ CREATE TABLE `system_settings` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `system_settings`
---
-
-INSERT INTO `system_settings` (`id`, `company_name`, `company_address`, `company_phone`, `company_email`, `company_logo`, `currency`, `created_at`, `updated_at`) VALUES
-(1, 'Tailor Shop', '123 Main Street, City, Country', '+1234567890', 'info@tailorshop.com', NULL, 'USD', '2025-08-11 11:31:38', '2025-08-11 11:31:38');
 
 -- --------------------------------------------------------
 
@@ -1032,6 +1119,20 @@ ALTER TABLE `purchase_return`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `return_percale`
+--
+ALTER TABLE `return_percale`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `return_no` (`return_no`),
+  ADD KEY `customer_id` (`customer_id`),
+  ADD KEY `supplier_id` (`supplier_id`),
+  ADD KEY `order_id` (`order_id`),
+  ADD KEY `purchase_id` (`purchase_id`),
+  ADD KEY `product_id` (`product_id`),
+  ADD KEY `status` (`status`),
+  ADD KEY `return_date` (`return_date`);
+
+--
 -- Indexes for table `roles`
 --
 ALTER TABLE `roles`
@@ -1054,6 +1155,13 @@ ALTER TABLE `sale_items`
 --
 ALTER TABLE `sale_return`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `settings`
+--
+ALTER TABLE `settings`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `setting_key` (`setting_key`);
 
 --
 -- Indexes for table `stock_items`
@@ -1199,7 +1307,7 @@ ALTER TABLE `customer_payment`
 -- AUTO_INCREMENT for table `expenses`
 --
 ALTER TABLE `expenses`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `expenses_category`
@@ -1211,7 +1319,7 @@ ALTER TABLE `expenses_category`
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `orders`
@@ -1241,19 +1349,25 @@ ALTER TABLE `products`
 -- AUTO_INCREMENT for table `purchase`
 --
 ALTER TABLE `purchase`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT for table `purchase_items`
 --
 ALTER TABLE `purchase_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT for table `purchase_return`
 --
 ALTER TABLE `purchase_return`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `return_percale`
+--
+ALTER TABLE `return_percale`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `roles`
@@ -1265,13 +1379,13 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT for table `sale`
 --
 ALTER TABLE `sale`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `sale_items`
 --
 ALTER TABLE `sale_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `sale_return`
@@ -1280,16 +1394,22 @@ ALTER TABLE `sale_return`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `settings`
+--
+ALTER TABLE `settings`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=115;
+
+--
 -- AUTO_INCREMENT for table `stock_items`
 --
 ALTER TABLE `stock_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
 
 --
 -- AUTO_INCREMENT for table `supplier`
 --
 ALTER TABLE `supplier`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `supplier_ledger`

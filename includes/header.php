@@ -98,6 +98,33 @@
             }
         }
         
+        /* WhatsApp button styling */
+        .btn-whatsapp {
+            background-color: #25D366 !important;
+            border-color: #25D366 !important;
+            color: white !important;
+        }
+        
+        .btn-whatsapp:hover {
+            background-color: #128C7E !important;
+            border-color: #128C7E !important;
+            color: white !important;
+        }
+        
+        .btn-whatsapp:focus {
+            background-color: #25D366 !important;
+            border-color: #25D366 !important;
+            color: white !important;
+            box-shadow: 0 0 0 0.2rem rgba(37, 211, 102, 0.25);
+        }
+        
+        .btn-whatsapp.disabled {
+            background-color: #6c757d !important;
+            border-color: #6c757d !important;
+            color: #adb5bd !important;
+            cursor: not-allowed;
+        }
+        
         /* Scrollbar styling for sidebar */
         .sidebar::-webkit-scrollbar {
             width: 6px;
