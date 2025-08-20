@@ -3,27 +3,41 @@ require_once 'includes/auth.php';
 require_login();
 require_once 'includes/config.php';
 
-$activePage = 'supplier_payment';
-
 // Handle Add Payment
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
     $supplier_id = $_POST['supplier_id'];
-    $payment_amount = $_POST['payment_amount'];
+    $amount = $_POST['amount'];
     $payment_date = $_POST['payment_date'];
-    $payment_method = $_POST['payment_method'];
-    $reference_no = trim($_POST['reference_no']);
-    $notes = trim($_POST['notes'] ?? '');
+    $payment_method_id = $_POST['payment_method_id'];
+    $receipt = $_POST['receipt'];
+    $details = $_POST['details'];
 
-    // Validate required fields
-    if (empty($supplier_id) || empty($payment_amount) || empty($payment_date) || empty($payment_method)) {
-        $error = "Please fill in all required fields.";
+    // Validate input
+    if (empty($supplier_id) || empty($amount) || empty($payment_date) || empty($payment_method_id)) {
+        $error = "All required fields must be filled.";
+    } elseif ($amount <= 0) {
+        $error = "Payment amount must be greater than 0.";
     } else {
         try {
             $pdo->beginTransaction();
             
+            // Check for duplicate payment (same supplier, amount, date, and receipt)
+            if (!empty($receipt)) {
+                $duplicate_check = $pdo->prepare("
+                    SELECT COUNT(*) as count FROM supplier_payments 
+                    WHERE supplier_id = ? AND payment_amount = ? AND payment_date = ? AND reference_no = ?
+                ");
+                $duplicate_check->execute([$supplier_id, $amount, $payment_date, $receipt]);
+                $duplicate_count = $duplicate_check->fetch()['count'];
+                
+                if ($duplicate_count > 0) {
+                    throw new Exception("A payment with the same receipt number already exists for this supplier on this date.");
+                }
+            }
+            
             // Insert payment record
             $stmt = $pdo->prepare("INSERT INTO supplier_payments (supplier_id, payment_amount, payment_date, payment_method, reference_no, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
-            $stmt->execute([$supplier_id, $payment_amount, $payment_date, $payment_method, $reference_no, $notes]);
+            $stmt->execute([$supplier_id, $amount, $payment_date, $payment_method_id, $receipt, $details]);
             
             $pdo->commit();
             header("Location: supplier_payment.php?success=added");
@@ -35,33 +49,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_payment'])) {
     }
 }
 
-// Fetch suppliers with their current balances
+// Fetch all suppliers with their current balances (improved calculation)
 $suppliers_query = "
     SELECT 
-        s.*,
-        COALESCE(SUM(p.total_amount), 0) as total_purchases,
+        s.id,
+        s.supplier_name,
+        s.supplier_contact,
+        s.opening_balance,
+        COALESCE(SUM(p.due_amount), 0) as total_dues,
         COALESCE(SUM(sp.payment_amount), 0) as total_payments,
-        (COALESCE(SUM(p.total_amount), 0) - COALESCE(SUM(sp.payment_amount), 0) + COALESCE(s.opening_balance, 0)) as current_balance
+        (COALESCE(SUM(p.due_amount), 0) - COALESCE(SUM(sp.payment_amount), 0) + COALESCE(s.opening_balance, 0)) as current_balance
     FROM supplier s
-    LEFT JOIN purchase p ON s.id = p.supplier_id
+    LEFT JOIN (
+        SELECT supplier_id, due_amount 
+        FROM purchase 
+        WHERE supplier_id IS NOT NULL 
+        AND status != 'cancelled'
+    ) p ON s.id = p.supplier_id
     LEFT JOIN supplier_payments sp ON s.id = sp.supplier_id
-    GROUP BY s.id, s.supplier_name, s.supplier_contact, s.supplier_address, s.opening_balance
+    GROUP BY s.id, s.supplier_name, s.supplier_contact, s.opening_balance
     ORDER BY s.supplier_name
 ";
 
 try {
     $suppliers = $pdo->query($suppliers_query)->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
-    // Fallback if supplier_payments table doesn't exist
+    // Fallback if supplier_payment table doesn't exist
     $suppliers = $pdo->query("SELECT * FROM supplier ORDER BY supplier_name")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($suppliers as &$supplier) {
-        $supplier['total_purchases'] = 0;
+        $supplier['total_dues'] = 0;
         $supplier['total_payments'] = 0;
         $supplier['current_balance'] = $supplier['opening_balance'] ?? 0;
     }
 }
 
-// Calculate summary totals
+// Debug: Show raw supplier data for troubleshooting
+if (isset($_GET['debug']) && $_GET['debug'] === '1') {
+    echo "<div class='alert alert-info'>";
+    echo "<h6>Debug Information:</h6>";
+    echo "<pre>";
+    foreach ($suppliers as $supplier) {
+        echo "Supplier: {$supplier['name']}\n";
+        echo "  Opening Balance: {$supplier['opening_balance']}\n";
+        echo "  Total Dues: {$supplier['total_dues']}\n";
+        echo "  Total Payments: {$supplier['total_payments']}\n";
+        echo "  Calculated Balance: {$supplier['current_balance']}\n";
+        echo "---\n";
+    }
+    echo "</pre>";
+    echo "</div>";
+}
+
+// Fetch recent payments
+$recent_payments = $pdo->query("
+    SELECT sp.*, s.supplier_name as supplier_name, sp.payment_method as payment_method_name
+    FROM supplier_payments sp 
+    LEFT JOIN supplier s ON sp.supplier_id = s.id 
+    ORDER BY sp.payment_date DESC 
+    LIMIT 10
+")->fetchAll(PDO::FETCH_ASSOC);
+
+// Calculate totals
+$total_payments = 0;
+$today_payments = 0;
+$month_payments = 0;
+
+foreach ($recent_payments as $payment) {
+    $total_payments += $payment['paid'];
+    if ($payment['payment_date'] == date('Y-m-d')) {
+        $today_payments += $payment['paid'];
+    }
+    if (date('Y-m', strtotime($payment['payment_date'])) == date('Y-m')) {
+        $month_payments += $payment['paid'];
+    }
+}
+
+// Calculate total supplier balances
 $total_payables = 0;
 $total_suppliers_with_balance = 0;
 foreach ($suppliers as $supplier) {
@@ -71,45 +134,80 @@ foreach ($suppliers as $supplier) {
     }
 }
 
+$page_title = "Supplier Payment";
+$activePage = "supplier_payment";
 include 'includes/header.php';
 ?>
 
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4  style="margin-top: 25px;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="mb-0"><i class="bi bi-credit-card text-primary"></i> Add Supplier Payment</h2>
-                <div class="d-flex">
-                    <a href="supplier_payment_list.php" class="btn btn-info me-2">
+        
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">💰 Supplier Payment</h1>
+                <div class="btn-toolbar mb-2 mb-md-0">
+                    <a href="supplier_payment_list.php" class="btn btn-outline-secondary me-2">
                         <i class="bi bi-list-ul"></i> Payment List
                     </a>
-                    <a href="supplier_ledger.php" class="btn btn-outline-info me-2">
+                    <a href="supplier_ledger.php" class="btn btn-outline-info">
                         <i class="bi bi-journal-text"></i> Supplier Ledger
                     </a>
-                    <a href="suppliers.php" class="btn btn-secondary">
-                        <i class="bi bi-truck"></i> View Suppliers
+                    <a href="?debug=1" class="btn btn-outline-warning ms-2">
+                        <i class="bi bi-bug"></i> Debug
                     </a>
                 </div>
             </div>
 
-            <?php if (isset($_GET['success'])): ?>
-                <div class="alert alert-success">
-                    <?php
-                    if ($_GET['success'] === 'added') echo "Payment added successfully! <a href='supplier_payment_list.php'>View Payment List</a>";
-                    ?>
+            <?php include 'includes/flash.php'; ?>
+
+            <?php if (isset($error)): ?>
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill"></i> <?= htmlspecialchars($error) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             <?php endif; ?>
 
-            <?php if (isset($error)): ?>
-                <div class="alert alert-danger">
-                    <?= htmlspecialchars($error) ?>
+            <?php if (isset($_GET['success']) && $_GET['success'] === 'added'): ?>
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle-fill"></i> Supplier payment added successfully!
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             <?php endif; ?>
 
             <!-- Summary Cards -->
             <div class="row mb-4">
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <div class="card text-white bg-success">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title">Today's Payments</h6>
+                                    <h4 class="mb-0">PKR <?= number_format($today_payments, 2) ?></h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-cash-coin fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-info">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <h6 class="card-title">This Month</h6>
+                                    <h4 class="mb-0">PKR <?= number_format($month_payments, 2) ?></h4>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="bi bi-calendar-month fs-1"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
                     <div class="card text-white bg-warning">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
@@ -124,8 +222,8 @@ include 'includes/header.php';
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="card text-white bg-info">
+                <div class="col-md-3">
+                    <div class="card text-white bg-primary">
                         <div class="card-body">
                             <div class="d-flex justify-content-between">
                                 <div>
@@ -139,107 +237,221 @@ include 'includes/header.php';
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="card text-white bg-success">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h6 class="card-title">Total Suppliers</h6>
-                                    <h4 class="mb-0"><?= count($suppliers) ?></h4>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="bi bi-people fs-1"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div class="row">
                 <!-- Add Payment Form -->
-                <div class="col-md-6">
-                    <div class="card mb-4">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0"><i class="bi bi-credit-card"></i> Record New Payment</h5>
+                <div class="col-lg-6">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-primary text-white py-3">
+                            <h6 class="mb-0">
+                                <i class="bi bi-credit-card me-2"></i>
+                                Add Supplier Payment
+                            </h6>
                         </div>
-                        <div class="card-body">
-                            <form method="post" id="paymentForm">
+                        <div class="card-body p-3">
+                            <form method="POST" id="paymentForm" class="needs-validation" novalidate>
+                                <!-- Supplier Selection Section -->
+                                <div class="form-section mb-3">
+                                    <h6 class="text-primary mb-2">
+                                        <i class="bi bi-building me-2"></i>Supplier Information
+                                    </h6>
                                 <div class="row">
-                                    <div class="col-md-12 mb-3">
-                                        <label class="form-label">Supplier *</label>
-                                        <div class="supplier-dropdown-container">
-                                            <button type="button" class="supplier-dropdown-btn" id="supplierDropdownBtn">
-                                                <span class="supplier-selected-text">Select Supplier</span>
-                                                <i class="bi bi-chevron-down dropdown-arrow"></i>
-                                            </button>
-                                            <div class="supplier-dropdown-list" id="supplierDropdownList">
-                                                <div class="supplier-search-box">
-                                                    <input type="text" id="supplierSearchInput" class="form-control form-control-sm" placeholder="🔍 Search suppliers...">
-                                                </div>
-                                                <div class="supplier-dropdown-separator"></div>
+                                        <div class="col-12 mb-2">
+                                            <label class="form-label fw-semibold small">
+                                                <i class="bi bi-person-badge me-1"></i>Select Supplier 
+                                                <span class="text-danger">*</span>
+                                            </label>
+                                            <select name="supplier_id" id="supplierSelect" class="form-select" required>
+                                                <option value="">Choose a supplier...</option>
                                                 <?php foreach ($suppliers as $supplier): ?>
-                                                    <div class="supplier-option" data-value="<?= $supplier['id'] ?>" data-balance="<?= $supplier['current_balance'] ?>">
-                                                        🏢 <?= htmlspecialchars($supplier['supplier_name']) ?>
-                                                        <div class="supplier-balance-info">
-                                                            <span class="balance-label">Balance:</span>
-                                                            <span class="balance-amount <?= $supplier['current_balance'] > 0 ? 'text-danger' : 'text-success' ?>">
+                                                    <option value="<?= $supplier['id'] ?>" 
+                                                            data-balance="<?= $supplier['current_balance'] ?>"
+                                                            data-name="<?= htmlspecialchars($supplier['supplier_name']) ?>"
+                                                            data-contact="<?= htmlspecialchars($supplier['supplier_contact'] ?? '') ?>">
+                                                        <?= htmlspecialchars($supplier['supplier_name']) ?> 
+                                                        <span class="text-muted">- <?= htmlspecialchars($supplier['supplier_contact'] ?? 'No Contact') ?></span>
+                                                        <span class="badge <?= $supplier['current_balance'] > 0 ? 'bg-warning' : ($supplier['current_balance'] < 0 ? 'bg-info' : 'bg-success') ?> float-end">
                                                                 PKR <?= number_format(abs($supplier['current_balance']), 2) ?>
-                                                                <?= $supplier['current_balance'] > 0 ? '(Owes)' : '(Credit)' ?>
                                                             </span>
-                                                        </div>
-                                                    </div>
+                                                    </option>
                                                 <?php endforeach; ?>
-                                            </div>
-                                            <input type="hidden" name="supplier_id" id="supplierSelect" required>
+                                            </select>
+                                            <div class="invalid-feedback small">Please select a supplier.</div>
                                         </div>
                                     </div>
                                     
                                     <!-- Supplier Balance Display -->
-                                    <div class="col-md-12 mb-3" id="supplierBalanceDisplay" style="display: none;">
-                                        <div class="alert alert-info">
-                                            <strong>Current Balance:</strong> 
+                                    <div class="col-12 mb-2" id="supplierBalanceDisplay" style="display: none;">
+                                        <div class="alert border-0 shadow-sm py-2" id="balanceAlert">
+                                            <div class="d-flex align-items-center">
+                                                <i class="bi bi-info-circle me-2"></i>
+                                                <div class="small">
+                                                    <strong class="d-block">Current Balance:</strong> 
                                             <span id="currentBalanceAmount" class="fw-bold"></span>
                                             <span id="balanceStatus" class="badge ms-2"></span>
+                                                </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Payment Amount *</label>
-                                        <input type="number" step="0.01" name="payment_amount" id="paymentAmount" class="form-control" required placeholder="Payment Amount">
-                                        <div class="form-text" id="paymentHelpText"></div>
+                                        <!-- Remaining Balance After Payment -->
+                                        <div class="alert alert-info border-0 shadow-sm mt-2 py-2" id="remainingBalanceDisplay" style="display: none;">
+                                            <div class="d-flex align-items-center">
+                                                <i class="bi bi-calculator me-2"></i>
+                                                <div class="small">
+                                                    <strong class="d-block">After Payment:</strong> 
+                                                    <span id="remainingBalanceAmount" class="fw-bold"></span>
+                                                    <span id="remainingBalanceStatus" class="badge ms-2"></span>
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Payment Date *</label>
-                                        <input type="date" name="payment_date" class="form-control" required value="<?= date('Y-m-d') ?>">
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Payment Method *</label>
-                                        <select name="payment_method" class="form-control" required>
-                                            <option value="">Select Method</option>
-                                            <option value="Cash">Cash</option>
-                                            <option value="Bank Transfer">Bank Transfer</option>
-                                            <option value="Check">Check</option>
-                                            <option value="Credit Card">Credit Card</option>
-                                            <option value="Other">Other</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Reference Number</label>
-                                        <input type="text" name="reference_no" class="form-control" placeholder="Check/Transaction number">
-                                    </div>
-                                    <div class="col-md-12 mb-3">
-                                        <label class="form-label">Notes</label>
-                                        <textarea name="notes" class="form-control" rows="3" placeholder="Enter payment notes or description"></textarea>
+                                        </div>
+                                        
+                                        <!-- Payment Summary -->
+                                        <div class="card border-0 shadow-sm mt-2" id="paymentSummaryCard" style="display: none;">
+                                            <div class="card-body py-2">
+                                                <h6 class="card-title mb-2 text-center text-primary small">
+                                                    <i class="bi bi-receipt me-2"></i>Payment Summary
+                                                </h6>
+                                                <div class="row text-center">
+                                                    <div class="col-4">
+                                                        <div class="p-1 rounded bg-light">
+                                                            <small class="text-muted d-block">Current Balance</small>
+                                                            <strong id="summaryCurrentBalance" class="text-danger small"></strong>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <div class="p-1 rounded bg-light">
+                                                            <small class="text-muted d-block">Payment Amount</small>
+                                                            <strong id="summaryPaymentAmount" class="text-primary small"></strong>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <div class="p-1 rounded bg-light">
+                                                            <small class="text-muted d-block">Remaining</small>
+                                                            <strong id="summaryRemainingBalance" class="small"></strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Supplier History Summary -->
+                                        <div class="row mt-2" id="supplierHistorySummary" style="display: none;">
+                                            <div class="col-12">
+                                                <div class="card border-0 bg-gradient-light">
+                                                    <div class="card-body py-2">
+                                                        <div class="row align-items-center text-center">
+                                                            <div class="col-6">
+                                                                <div class="d-flex align-items-center justify-content-center">
+                                                                    <i class="bi bi-cart text-primary me-2 fs-5"></i>
+                                                                    <div class="text-start">
+                                                                        <small class="text-muted d-block fw-semibold">Recent Purchases</small>
+                                                                        <strong id="recentPurchasesInfo" class="text-primary small"></strong>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <div class="d-flex align-items-center justify-content-center">
+                                                                    <i class="bi bi-credit-card text-success me-2 fs-5"></i>
+                                                                    <div class="text-start">
+                                                                        <small class="text-muted d-block fw-semibold">Recent Payments</small>
+                                                                        <strong id="recentPaymentsInfo" class="text-success small"></strong>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div class="d-flex gap-2">
-                                    <button type="submit" class="btn btn-primary" name="add_payment" id="submitPaymentBtn">
-                                        <i class="bi bi-plus-circle"></i> Add Payment
+                                <!-- Payment Details Section -->
+                                <div class="form-section mb-3">
+                                    <h6 class="text-primary mb-2">
+                                        <i class="bi bi-credit-card me-2"></i>Payment Details
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-semibold small">
+                                                <i class="bi bi-currency-dollar me-1"></i>Payment Amount 
+                                                <span class="text-danger">*</span>
+                                            </label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text bg-light small">PKR</span>
+                                                <input type="number" name="amount" id="paymentAmount" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                                            </div>
+                                            <div class="form-text text-muted small" id="paymentHelpText"></div>
+                                            <div class="invalid-feedback small">Please enter a valid payment amount.</div>
+                                            
+                                            <!-- Quick Payment Buttons -->
+                                            <div class="mt-2" id="quickPaymentButtons" style="display: none;">
+                                                <small class="text-muted d-block mb-1 fw-semibold">Quick Payment:</small>
+                                                <div class="d-flex gap-1 flex-wrap">
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" id="payFullBalance">
+                                                        <i class="bi bi-check-all me-1"></i>Full
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="payHalfBalance">
+                                                        <i class="bi bi-50-percent me-1"></i>Half
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-info btn-sm" id="payQuarterBalance">
+                                                        <i class="bi bi-25-percent me-1"></i>Quarter
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-semibold small">
+                                                <i class="bi bi-calendar me-1"></i>Payment Date 
+                                                <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="date" name="payment_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                                            <div class="invalid-feedback small">Please select a payment date.</div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-semibold small">
+                                                <i class="bi bi-credit-card-2-front me-1"></i>Payment Method 
+                                                <span class="text-danger">*</span>
+                                            </label>
+                                            <select name="payment_method_id" class="form-select" required>
+                                                <option value="">Choose payment method...</option>
+                                                <option value="1">💵 Cash</option>
+                                                <option value="2">🌐 Online Banking</option>
+                                                <option value="3">💳 Credit Card</option>
+                                                <option value="4">💳 Debit Card</option>
+                                                <option value="5">🏦 Bank Transfer</option>
+                                                <option value="6">📱 Mobile Payment</option>
+                                                <option value="7">📄 Check</option>
+                                        </select>
+                                            <div class="invalid-feedback small">Please select a payment method.</div>
+                                    </div>
+
+                                        <div class="col-md-6 mb-2">
+                                            <label class="form-label fw-semibold small">
+                                                <i class="bi bi-receipt me-1"></i>Receipt Number
+                                            </label>
+                                            <input type="text" name="receipt" class="form-control" placeholder="Optional receipt number">
+                                    </div>
+                                        
+                                        <div class="col-12 mb-3">
+                                            <label class="form-label fw-semibold small">
+                                                <i class="bi bi-chat-text me-1"></i>Payment Notes
+                                            </label>
+                                            <textarea name="details" class="form-control" rows="2" placeholder="Optional details about the payment"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Form Actions -->
+                                <div class="form-actions text-center pt-2 border-top">
+                                    <button type="submit" name="add_payment" class="btn btn-primary me-2" id="submitPaymentBtn">
+                                        <i class="bi bi-plus-circle me-2"></i>Process Payment
                                     </button>
-                                    <button type="reset" class="btn btn-secondary">
-                                        <i class="bi bi-arrow-clockwise"></i> Reset Form
+                                    <button type="reset" class="btn btn-outline-secondary" id="resetFormBtn">
+                                        <i class="bi bi-arrow-clockwise me-2"></i>Reset
                                     </button>
                                 </div>
                             </form>
@@ -248,41 +460,55 @@ include 'includes/header.php';
                 </div>
 
                 <!-- Supplier Balances Summary -->
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0"><i class="bi bi-list-ul"></i> Supplier Balances</h5>
+                <div class="col-lg-6">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-info text-white py-3">
+                            <h6 class="mb-0">
+                                <i class="bi bi-graph-up me-2"></i>Supplier Balances
+                            </h6>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body p-3">
                             <?php if (empty($suppliers)): ?>
-                                <p class="text-muted text-center">No suppliers found.</p>
+                                <div class="text-center py-3">
+                                    <i class="bi bi-inbox fs-4 text-muted"></i>
+                                    <p class="text-muted mt-2 small">No suppliers found.</p>
+                                </div>
                             <?php else: ?>
                                 <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead>
+                                    <table class="table table-hover table-sm mb-0">
+                                        <thead class="table-light">
                                             <tr>
-                                                <th>Supplier</th>
-                                                <th>Balance</th>
-                                                <th>Status</th>
+                                                <th class="border-0 small">Supplier</th>
+                                                <th class="border-0 text-end small">Balance</th>
+                                                <th class="border-0 text-center small">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php foreach ($suppliers as $supplier): ?>
-                                                <tr>
+                                                <tr class="align-middle">
                                                     <td>
-                                                        <strong><?= htmlspecialchars($supplier['supplier_name']) ?></strong><br>
-                                                        <small class="text-muted"><?= htmlspecialchars($supplier['supplier_contact'] ?: 'No contact') ?></small>
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="avatar-sm bg-light rounded-circle d-flex align-items-center justify-content-center me-2">
+                                                                <i class="bi bi-building text-primary small"></i>
+                                                            </div>
+                                                            <div>
+                                                                <strong class="d-block small"><?= htmlspecialchars($supplier['supplier_name']) ?></strong>
+                                                                <small class="text-muted"><?= htmlspecialchars($supplier['supplier_contact'] ?? 'No contact') ?></small>
+                                                            </div>
+                                                        </div>
                                                     </td>
-                                                    <td class="fw-bold <?= $supplier['current_balance'] > 0 ? 'text-danger' : 'text-success' ?>">
+                                                    <td class="text-end">
+                                                        <span class="fw-bold small <?= $supplier['current_balance'] > 0 ? 'text-danger' : 'text-success' ?>">
                                                         PKR <?= number_format(abs($supplier['current_balance']), 2) ?>
+                                                        </span>
                                                     </td>
-                                                    <td>
+                                                    <td class="text-center">
                                                         <?php if ($supplier['current_balance'] > 0): ?>
-                                                            <span class="badge bg-warning">Owes Money</span>
+                                                            <span class="badge bg-warning bg-opacity-75 small">Owes</span>
                                                         <?php elseif ($supplier['current_balance'] < 0): ?>
-                                                            <span class="badge bg-info">Has Credit</span>
+                                                            <span class="badge bg-info bg-opacity-75 small">Credit</span>
                                                         <?php else: ?>
-                                                            <span class="badge bg-success">Settled</span>
+                                                            <span class="badge bg-success bg-opacity-75 small">Settled</span>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>
@@ -292,7 +518,7 @@ include 'includes/header.php';
                                 </div>
                                 <div class="text-center mt-3">
                                     <a href="supplier_ledger.php" class="btn btn-outline-info btn-sm">
-                                        View Detailed Ledger
+                                        <i class="bi bi-list-ul me-2"></i>View Ledger
                                     </a>
                                 </div>
                             <?php endif; ?>
@@ -305,316 +531,861 @@ include 'includes/header.php';
 </div>
 
 <style>
-/* Supplier dropdown styling */
-.supplier-dropdown-container {
-    position: relative;
-    width: 100%;
+/* Enhanced form styling */
+.form-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
 }
 
-.supplier-dropdown-btn {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.375rem 0.75rem;
-    font-size: 1rem;
-    font-weight: 400;
-    line-height: 1.5;
-    color: #212529;
-    background-color: #fff;
-    border: 1px solid #ced4da;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-    text-align: left;
+.form-section h6 {
+    border-bottom: 2px solid #dee2e6;
+    padding-bottom: 0.25rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
 }
 
-.supplier-dropdown-btn:hover {
-    border-color: #86b7fe;
+/* Enhanced form controls */
+.form-control, .form-select {
+    border: 2px solid #e9ecef;
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
 }
 
-.supplier-dropdown-btn:focus {
-    border-color: #86b7fe;
-    outline: 0;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+.form-control:focus, .form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    transform: translateY(-1px);
 }
 
-.dropdown-arrow {
-    transition: transform 0.2s ease;
-}
-
-.supplier-dropdown-btn.active .dropdown-arrow {
-    transform: rotate(180deg);
-}
-
-.supplier-dropdown-list {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    display: none;
-    background-color: #fff;
-    border: 1px solid #ced4da;
-    border-radius: 0.375rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    max-height: 300px;
-    overflow-y: auto;
-    margin-top: 2px;
-}
-
-.supplier-dropdown-list.show {
-    display: block;
-}
-
-.supplier-search-box {
-    padding: 0.75rem;
-    border-bottom: 1px solid #dee2e6;
-}
-
-.supplier-search-box input {
-    width: 100%;
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
-    padding: 0.375rem 0.75rem;
+/* Enhanced input groups */
+.input-group-text {
+    border: 2px solid #e9ecef;
+    border-right: none;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    font-weight: 600;
+    color: #495057;
+    padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
 }
 
-.supplier-dropdown-separator {
-    height: 1px;
-    background-color: #dee2e6;
-    margin: 0;
+.input-group .form-control {
+    border-left: none;
 }
 
-.supplier-option {
-    padding: 0.75rem 1rem;
-    cursor: pointer;
-    transition: background-color 0.15s ease-in-out;
-    border-bottom: 1px solid #f8f9fa;
-}
-
-.supplier-option:hover {
-    background-color: #f8f9fa;
-}
-
-.supplier-option.selected {
-    background-color: #0d6efd;
-    color: #fff;
-}
-
-.supplier-option.hidden {
-    display: none;
-}
-
-.supplier-balance-info {
-    font-size: 0.8rem;
-    margin-top: 0.25rem;
-    opacity: 0.8;
-}
-
-.balance-label {
-    font-weight: 500;
-}
-
-.balance-amount {
-    font-weight: bold;
-}
-
-/* Alert styling */
-.alert {
-    border-radius: 0.5rem;
-    border: none;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-}
-
-/* Table styling */
-.table th {
-    background-color: #f8f9fa;
-    border-top: none;
+/* Enhanced labels */
+.form-label {
+    color: #495057;
     font-weight: 600;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
 }
 
-.table td {
-    vertical-align: middle;
-}
-
-/* Badge styling */
-.badge {
-    font-size: 0.75rem;
-    padding: 0.375rem 0.75rem;
-}
-
-/* Card styling */
-.card {
-    border: none;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+/* Enhanced buttons */
+.btn {
     border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
+}
+
+.btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8rem;
+}
+
+/* Enhanced alerts */
+.alert {
+    border-radius: 0.75rem;
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 0.75rem;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    color: #0c5460;
+}
+
+/* Enhanced cards */
+.card {
+    border-radius: 0.75rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.1);
 }
 
 .card-header {
-    border-radius: 0.5rem 0.5rem 0 0 !important;
     border-bottom: none;
+    padding: 0.75rem 1rem;
+}
+
+.card-body {
+    padding: 1rem;
+}
+
+/* Enhanced table */
+.table {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.table th {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: none;
+    font-weight: 600;
+    color: #495057;
+    padding: 0.75rem 0.5rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.25px;
+}
+
+.table td {
+    padding: 0.75rem 0.5rem;
+    border-bottom: 1px solid #f1f3f4;
+    vertical-align: middle;
+}
+
+.table tbody tr:hover {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    transform: scale(1.005);
+    transition: all 0.2s ease;
+}
+
+/* Enhanced badges */
+.badge {
+    border-radius: 0.375rem;
+    font-weight: 600;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.7rem;
+}
+
+/* Avatar styling */
+.avatar-sm {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+}
+
+/* Enhanced quick payment buttons */
+#quickPaymentButtons .btn {
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
+    transition: all 0.2s ease;
+}
+
+#quickPaymentButtons .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.15);
+}
+
+/* Form validation styling */
+.was-validated .form-control:valid,
+.was-validated .form-select:valid {
+    border-color: #198754;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='m2.3 6.73.94-.94 2.89 2.89 2.89-2.89.94.94L5.79 9.56z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.was-validated .form-control:invalid,
+.was-validated .form-select:invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='m5.8 4.6 2.4 2.4m0-2.4L5.8 7'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .form-section {
+        padding: 0.75rem;
+    }
+    
+    .card-body {
+        padding: 0.75rem;
+    }
+}
+
+/* Animation for balance display */
+#supplierBalanceDisplay {
+    animation: slideDown 0.3s ease-out;
+    transition: opacity 0.3s ease;
+}
+
+/* Ensure balance display is always visible when shown */
+#supplierBalanceDisplay.show {
+    display: block !important;
+    opacity: 1 !important;
+}
+
+/* Balance alert styling */
+#balanceAlert {
+    margin-bottom: 0.5rem !important;
+}
+
+#currentBalanceAmount {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+}
+
+#balanceStatus {
+    font-size: 0.75rem !important;
+    padding: 0.375rem 0.5rem !important;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Enhanced payment summary */
+#paymentSummaryCard .card-body {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    padding: 0.75rem;
+}
+
+#paymentSummaryCard .bg-light {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
+    border: 1px solid #e9ecef;
+    border-radius: 0.375rem;
+}
+
+/* Enhanced supplier history */
+#supplierHistorySummary .card {
+    border: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+#supplierHistorySummary .card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.1);
+}
+
+#supplierHistorySummary .bg-gradient-light {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%) !important;
+}
+
+#supplierHistorySummary .card-body {
+    padding: 0.75rem !important;
+}
+
+#supplierHistorySummary .fs-5 {
+    font-size: 1.1rem !important;
+}
+
+#supplierHistorySummary .text-start {
+    text-align: left !important;
+}
+
+#supplierHistorySummary .fw-semibold {
+    font-weight: 600 !important;
+}
+
+/* Form actions section */
+.form-actions {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-radius: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+/* Enhanced select options */
+.form-select option {
+    padding: 0.375rem;
+    border-radius: 0.25rem;
+}
+
+/* Focus states for better accessibility */
+.form-control:focus,
+.form-select:focus,
+.btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Loading states */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Enhanced table responsiveness */
+@media (max-width: 576px) {
+    .table-responsive {
+    border-radius: 0.5rem;
+        overflow: hidden;
+    }
+    
+    .table th,
+    .table td {
+        padding: 0.5rem 0.375rem;
+        font-size: 0.75rem;
+    }
+}
+
+/* Compact spacing utilities */
+.mb-2 {
+    margin-bottom: 0.5rem !important;
+}
+
+.mb-3 {
+    margin-bottom: 1rem !important;
+}
+
+.mt-2 {
+    margin-top: 0.5rem !important;
+}
+
+.mt-3 {
+    margin-top: 1rem !important;
+}
+
+.py-2 {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+}
+
+.py-3 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+}
+
+.p-3 {
+    padding: 1rem !important;
+}
+
+/* Small text utilities */
+.small {
+    font-size: 0.875rem !important;
+}
+
+/* Compact form sections */
+.form-section {
+    margin-bottom: 1rem !important;
+}
+
+/* Compact card headers */
+.card-header h6 {
+    margin-bottom: 0 !important;
+    font-size: 0.9rem !important;
 }
 </style>
 
 <script>
-// Initialize supplier dropdown functionality
 document.addEventListener('DOMContentLoaded', function() {
-    const dropdownBtn = document.getElementById('supplierDropdownBtn');
-    const dropdownList = document.getElementById('supplierDropdownList');
     const supplierSelect = document.getElementById('supplierSelect');
-    const supplierSearchInput = document.getElementById('supplierSearchInput');
-    const selectedText = document.querySelector('.supplier-selected-text');
-    const supplierBalanceDisplay = document.getElementById('supplierBalanceDisplay');
-    const currentBalanceAmount = document.getElementById('currentBalanceAmount');
-    const balanceStatus = document.getElementById('balanceStatus');
     const paymentAmount = document.getElementById('paymentAmount');
+    const supplierBalanceDisplay = document.getElementById('supplierBalanceDisplay');
     const paymentHelpText = document.getElementById('paymentHelpText');
     const submitPaymentBtn = document.getElementById('submitPaymentBtn');
+    const resetFormBtn = document.getElementById('resetFormBtn');
+
+    // Enhanced form validation
+    const form = document.getElementById('paymentForm');
     
-    // Toggle dropdown on click
-    dropdownBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        dropdownList.classList.toggle('show');
-        dropdownBtn.classList.toggle('active');
-        
-        if (dropdownList.classList.contains('show')) {
-            supplierSearchInput.focus();
-        }
-    });
-    
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!dropdownBtn.contains(e.target) && !dropdownList.contains(e.target)) {
-            dropdownList.classList.remove('show');
-            dropdownBtn.classList.remove('active');
-        }
-    });
-    
-    // Handle supplier option selection
-    dropdownList.addEventListener('click', function(e) {
-        const supplierOption = e.target.closest('.supplier-option');
-        if (supplierOption) {
-            const value = supplierOption.dataset.value;
-            const text = supplierOption.textContent.split('\n')[0]; // Get first line only
-            const balance = parseFloat(supplierOption.dataset.balance) || 0;
-            
-            // Update hidden input and display text
-            supplierSelect.value = value;
-            selectedText.textContent = text;
-            
-            // Update visual selection
-            dropdownList.querySelectorAll('.supplier-option').forEach(item => {
-                item.classList.remove('selected');
-            });
-            supplierOption.classList.add('selected');
-            
-            // Show supplier balance
-            showSupplierBalance(balance);
-            
-            // Close dropdown
-            dropdownList.classList.remove('show');
-            dropdownBtn.classList.remove('active');
-        }
-    });
-    
-    // Handle search functionality
-    supplierSearchInput.addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        const supplierOptions = dropdownList.querySelectorAll('.supplier-option');
-        
-        supplierOptions.forEach(option => {
-            const optionText = option.textContent.toLowerCase();
-            if (optionText.includes(searchTerm)) {
-                option.classList.remove('hidden');
-            } else {
-                option.classList.add('hidden');
-            }
-        });
-    });
-    
-    // Clear search when dropdown opens
-    dropdownBtn.addEventListener('click', function() {
-        supplierSearchInput.value = '';
-        dropdownList.querySelectorAll('.supplier-option').forEach(option => {
-            option.classList.remove('hidden');
-        });
-    });
-    
-    // Handle payment amount input
+    // Real-time validation
     paymentAmount.addEventListener('input', function() {
-        const amount = parseFloat(this.value) || 0;
-        const balance = parseFloat(currentBalanceAmount.textContent.replace(/[^\d.-]/g, '')) || 0;
-        
-        if (amount > 0 && balance > 0) {
-            const remaining = balance - amount;
-            if (remaining < 0) {
-                paymentHelpText.innerHTML = `<span class="text-warning">⚠️ Payment exceeds balance. Supplier will have credit of PKR ${Math.abs(remaining).toFixed(2)}</span>`;
-                submitPaymentBtn.disabled = false;
-            } else if (remaining === 0) {
-                paymentHelpText.innerHTML = `<span class="text-success">✅ Payment will settle the balance completely</span>`;
-                submitPaymentBtn.disabled = false;
-            } else {
-                paymentHelpText.innerHTML = `<span class="text-info">ℹ️ Remaining balance after payment: PKR ${remaining.toFixed(2)}</span>`;
-                submitPaymentBtn.disabled = false;
-            }
-        } else {
-            paymentHelpText.innerHTML = '';
-            submitPaymentBtn.disabled = false;
+        validatePaymentAmount();
+        if (supplierSelect.value) {
+            updatePaymentHelpText(this.value);
+            updateRemainingBalance(this.value);
         }
     });
-    
-    // Form validation
-    document.getElementById('paymentForm').addEventListener('submit', function(e) {
-        const supplierId = supplierSelect.value;
-        const amount = parseFloat(paymentAmount.value) || 0;
+
+    // Add event listener for supplier selection change
+    supplierSelect.addEventListener('change', function() {
+        console.log('Supplier changed to:', this.value);
         
-        if (!supplierId) {
+        // Clear any existing validation states
+        this.classList.remove('is-invalid', 'is-valid');
+        
+        if (this.value) {
+            // Clear payment amount when changing supplier
+            paymentAmount.value = '';
+            
+            // Show balance and fetch history
+            showSupplierBalance();
+            fetchSupplierHistory(this.value);
+            
+            // Add valid state
+            this.classList.add('is-valid');
+        } else {
+            hideSupplierBalance();
+        }
+    });
+
+    // Also trigger on page load if a supplier is pre-selected
+    if (supplierSelect.value) {
+        showSupplierBalance();
+        fetchSupplierHistory(supplierSelect.value);
+    }
+
+    // Enhanced form submission
+    form.addEventListener('submit', function(e) {
+        if (!validateForm()) {
             e.preventDefault();
-            alert('Please select a supplier');
+            return false;
+        }
+        
+        // Show loading state
+        submitPaymentBtn.disabled = true;
+        submitPaymentBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Processing...';
+        
+        // Add success animation
+        submitPaymentBtn.classList.add('btn-success');
+        
+        return true;
+    });
+
+    // Enhanced reset functionality
+    resetFormBtn.addEventListener('click', function() {
+        // Add confirmation
+        if (confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
+            resetForm();
+        }
+    });
+
+    // Enhanced validation functions
+    function validatePaymentAmount() {
+        const amount = parseFloat(paymentAmount.value);
+        const isValid = amount > 0;
+        
+        if (isValid) {
+            paymentAmount.classList.remove('is-invalid');
+            paymentAmount.classList.add('is-valid');
+            } else {
+            paymentAmount.classList.remove('is-valid');
+            paymentAmount.classList.add('is-invalid');
+        }
+        
+        return isValid;
+    }
+
+    function validateForm() {
+        let isValid = true;
+        
+        // Validate supplier selection
+        if (!supplierSelect.value) {
+            supplierSelect.classList.add('is-invalid');
+            isValid = false;
+            } else {
+            supplierSelect.classList.remove('is-invalid');
+            supplierSelect.classList.add('is-valid');
+        }
+        
+        // Validate payment amount
+        if (!validatePaymentAmount()) {
+            isValid = false;
+        }
+        
+        // Validate payment method
+        const paymentMethod = document.querySelector('select[name="payment_method_id"]');
+        if (!paymentMethod.value) {
+            paymentMethod.classList.add('is-invalid');
+            isValid = false;
+        } else {
+            paymentMethod.classList.remove('is-invalid');
+            paymentMethod.classList.add('is-valid');
+        }
+        
+        // Validate payment date
+        const paymentDate = document.querySelector('input[name="payment_date"]');
+        if (!paymentDate.value) {
+            paymentDate.classList.add('is-invalid');
+            isValid = false;
+        } else {
+            paymentDate.classList.remove('is-invalid');
+            paymentDate.classList.add('is-valid');
+        }
+        
+        return isValid;
+    }
+
+    function resetForm() {
+        // Reset form validation states
+        form.classList.remove('was-validated');
+        document.querySelectorAll('.is-valid, .is-invalid').forEach(el => {
+            el.classList.remove('is-valid', 'is-invalid');
+        });
+        
+        // Reset form fields
+        form.reset();
+        
+        // Hide all dynamic displays
+        hideSupplierBalance();
+        
+        // Reset button states
+        submitPaymentBtn.disabled = false;
+        submitPaymentBtn.innerHTML = '<i class="bi bi-plus-circle me-2"></i>Process Payment';
+        submitPaymentBtn.classList.remove('btn-success');
+        
+        // Add reset animation
+        resetFormBtn.classList.add('btn-success');
+        setTimeout(() => {
+            resetFormBtn.classList.remove('btn-success');
+        }, 1000);
+    }
+
+    // Enhanced supplier balance display
+    function showSupplierBalance() {
+        if (!supplierSelect.value) {
+            hideSupplierBalance();
             return;
         }
         
-        if (amount <= 0) {
-            e.preventDefault();
-            alert('Payment amount must be greater than 0');
-            return;
-        }
+        const selectedOption = supplierSelect.options[supplierSelect.selectedIndex];
+        const balance = parseFloat(selectedOption.dataset.balance) || 0;
+        const supplierName = selectedOption.dataset.name || '';
+        const supplierContact = selectedOption.dataset.contact || '';
         
-        // Show confirmation for large payments
-        const balance = parseFloat(currentBalanceAmount.textContent.replace(/[^\d.-]/g, '')) || 0;
-        if (amount > balance * 1.5) {
-            if (!confirm(`Are you sure you want to record a payment of PKR ${amount.toFixed(2)}? This is significantly higher than the current balance of PKR ${balance.toFixed(2)}.`)) {
-                e.preventDefault();
+        // Get DOM elements
+        const balanceAlert = document.getElementById('balanceAlert');
+        const currentBalanceAmount = document.getElementById('currentBalanceAmount');
+        const balanceStatus = document.getElementById('balanceStatus');
+        
+        // Ensure all elements exist
+        if (!balanceAlert || !currentBalanceAmount || !balanceStatus) {
+            console.error('Balance display elements not found');
                 return;
             }
-        }
-    });
     
-    function showSupplierBalance(balance) {
-        if (balance !== 0) {
+        // Always show the balance display first
             supplierBalanceDisplay.style.display = 'block';
+        supplierBalanceDisplay.classList.add('show');
+        
+        // Set balance amount with proper formatting
             currentBalanceAmount.textContent = `PKR ${Math.abs(balance).toFixed(2)}`;
             
+        // Set alert styling and status based on balance
             if (balance > 0) {
+            // Supplier owes money
+            balanceAlert.className = 'alert alert-warning border-0 shadow-sm py-2';
                 balanceStatus.textContent = 'Owes Money';
-                balanceStatus.className = 'badge bg-warning';
+            balanceStatus.className = 'badge bg-warning ms-2';
                 currentBalanceAmount.className = 'fw-bold text-danger';
-            } else {
+        } else if (balance < 0) {
+            // Supplier has credit
+            balanceAlert.className = 'alert alert-info border-0 shadow-sm py-2';
                 balanceStatus.textContent = 'Has Credit';
-                balanceStatus.className = 'badge bg-info';
+            balanceStatus.className = 'badge bg-info ms-2';
                 currentBalanceAmount.className = 'fw-bold text-success';
-            }
         } else {
-            supplierBalanceDisplay.style.display = 'block';
+            // Supplier is settled
+            balanceAlert.className = 'alert alert-success border-0 shadow-sm py-2';
             currentBalanceAmount.textContent = 'PKR 0.00';
             balanceStatus.textContent = 'Settled';
-            balanceStatus.className = 'badge bg-success';
+            balanceStatus.className = 'badge bg-success ms-2';
             currentBalanceAmount.className = 'fw-bold text-success';
         }
         
-        // Update payment help text
+        // Update payment help text if amount is entered
+        const currentAmount = parseFloat(paymentAmount.value) || 0;
+        if (currentAmount > 0) {
+            updatePaymentHelpText(currentAmount);
+            updateRemainingBalance(currentAmount);
+        } else {
         paymentHelpText.innerHTML = '';
+            document.getElementById('remainingBalanceDisplay').style.display = 'none';
+            document.getElementById('paymentSummaryCard').style.display = 'none';
+        }
+        
+        // Show/hide quick payment buttons with animation
+        const quickPaymentButtons = document.getElementById('quickPaymentButtons');
+        if (quickPaymentButtons) {
+            if (balance > 0) {
+                quickPaymentButtons.style.display = 'block';
+                quickPaymentButtons.style.opacity = '0';
+                setTimeout(() => {
+                    quickPaymentButtons.style.transition = 'opacity 0.3s ease';
+                    quickPaymentButtons.style.opacity = '1';
+                }, 100);
+            } else {
+                quickPaymentButtons.style.display = 'none';
+            }
+        }
+        
+        // Add success animation to balance display
+        supplierBalanceDisplay.style.opacity = '0';
+        setTimeout(() => {
+            supplierBalanceDisplay.style.transition = 'opacity 0.3s ease';
+            supplierBalanceDisplay.style.opacity = '1';
+        }, 50);
+        
+        console.log('Balance displayed:', balance, 'for supplier:', supplierName);
+    }
+
+    function hideSupplierBalance() {
+        supplierBalanceDisplay.style.display = 'none';
+        supplierBalanceDisplay.classList.remove('show');
+        paymentHelpText.innerHTML = '';
+        document.getElementById('supplierHistorySummary').style.display = 'none';
+        document.getElementById('remainingBalanceDisplay').style.display = 'none';
+        document.getElementById('paymentSummaryCard').style.display = 'none';
+        
+        // Clear supplier history data
+        document.getElementById('recentPurchasesInfo').textContent = '';
+        document.getElementById('recentPaymentsInfo').textContent = '';
+        
+        // Clear balance display data
+        document.getElementById('currentBalanceAmount').textContent = '';
+        document.getElementById('balanceStatus').textContent = '';
+        
+        // Hide quick payment buttons
+        const quickPaymentButtons = document.getElementById('quickPaymentButtons');
+        if (quickPaymentButtons) {
+            quickPaymentButtons.style.display = 'none';
+        }
+        
+        console.log('Balance display hidden');
+    }
+
+    function fetchSupplierHistory(supplierId) {
+        const historySummary = document.getElementById('supplierHistorySummary');
+        if (!historySummary) return;
+        
+        // Clear previous data first
+        document.getElementById('recentPurchasesInfo').textContent = 'Loading...';
+        document.getElementById('recentPaymentsInfo').textContent = 'Loading...';
+        
+        historySummary.style.display = 'block';
+        historySummary.style.opacity = '0.7';
+        
+        // Make AJAX call to get supplier history
+        fetch(`get_supplier_history.php?supplier_id=${supplierId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const summary = data.data.summary;
+                    
+                    // Format purchases info with proper amount handling
+                    const purchasesAmount = Math.abs(summary.total_purchases);
+                    const purchasesText = summary.purchases_count === 1 ? 'purchase' : 'purchases';
+                    document.getElementById('recentPurchasesInfo').textContent = 
+                        `${summary.purchases_count} ${purchasesText} (PKR ${purchasesAmount.toFixed(2)})`;
+                    
+                    // Format payments info with proper amount handling
+                    const paymentsAmount = Math.abs(summary.total_payments);
+                    const paymentsText = summary.payments_count === 1 ? 'payment' : 'payments';
+                    document.getElementById('recentPaymentsInfo').textContent = 
+                        `${summary.payments_count} ${paymentsText} (PKR ${paymentsAmount.toFixed(2)})`;
+                    
+                    // Add success animation
+                    historySummary.style.opacity = '1';
+                    historySummary.style.transition = 'opacity 0.3s ease';
+                } else {
+                    document.getElementById('recentPurchasesInfo').textContent = 'No data';
+                    document.getElementById('recentPaymentsInfo').textContent = 'No data';
+                    historySummary.style.opacity = '1';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching supplier history:', error);
+                document.getElementById('recentPurchasesInfo').textContent = 'Error loading data';
+                document.getElementById('recentPaymentsInfo').textContent = 'Error loading data';
+                historySummary.style.opacity = '1';
+            });
+    }
+
+    function updatePaymentHelpText(amount) {
+        if (!supplierSelect.value) {
+            paymentHelpText.innerHTML = '';
+            return;
+        }
+        
+        const selectedOption = supplierSelect.options[supplierSelect.selectedIndex];
+        const balance = parseFloat(selectedOption.dataset.balance) || 0;
+        
+        if (amount <= 0) {
+            paymentHelpText.innerHTML = '';
+            submitPaymentBtn.disabled = true;
+            return;
+        }
+        
+        submitPaymentBtn.disabled = false;
+        
+        if (balance > 0) {
+            // Supplier owes money
+            const remaining = balance - amount;
+            if (remaining < 0) {
+                paymentHelpText.innerHTML = `<span class="text-warning">⚠️ Payment exceeds balance. Supplier will have credit of PKR ${Math.abs(remaining).toFixed(2)}</span>`;
+            } else if (remaining === 0) {
+                paymentHelpText.innerHTML = `<span class="text-success">✅ Payment will settle the balance completely</span>`;
+            } else {
+                paymentHelpText.innerHTML = `<span class="text-info">ℹ️ Remaining balance after payment: PKR ${remaining.toFixed(2)}</span>`;
+            }
+        } else if (balance < 0) {
+            // Supplier has credit
+            paymentHelpText.innerHTML = `<span class="text-info">ℹ️ Supplier already has credit. This payment will increase their credit balance</span>`;
+        } else {
+            // Supplier is settled
+            paymentHelpText.innerHTML = `<span class="text-info">ℹ️ Recording payment of PKR ${amount.toFixed(2)}</span>`;
+        }
+    }
+
+    function updateRemainingBalance(amount) {
+        if (!supplierSelect.value) {
+            document.getElementById('remainingBalanceDisplay').style.display = 'none';
+            document.getElementById('paymentSummaryCard').style.display = 'none';
+            return;
+        }
+
+        const selectedOption = supplierSelect.options[supplierSelect.selectedIndex];
+        const balance = parseFloat(selectedOption.dataset.balance) || 0;
+
+        if (balance > 0 && amount > 0) {
+            const remaining = balance - amount;
+            
+            // Update remaining balance display
+            document.getElementById('remainingBalanceAmount').textContent = `PKR ${remaining.toFixed(2)}`;
+            if (remaining < 0) {
+                document.getElementById('remainingBalanceStatus').textContent = 'Has Credit';
+                document.getElementById('remainingBalanceStatus').className = 'badge bg-info ms-2 fs-6';
+                document.getElementById('remainingBalanceAmount').className = 'fw-bold fs-5 text-success';
+            } else if (remaining === 0) {
+                document.getElementById('remainingBalanceStatus').textContent = 'Settled';
+                document.getElementById('remainingBalanceStatus').className = 'badge bg-success ms-2 fs-6';
+                document.getElementById('remainingBalanceAmount').className = 'fw-bold fs-5 text-success';
+            } else {
+                document.getElementById('remainingBalanceStatus').textContent = 'Owes Money';
+                document.getElementById('remainingBalanceStatus').className = 'badge bg-warning ms-2 fs-6';
+                document.getElementById('remainingBalanceAmount').className = 'fw-bold fs-5 text-danger';
+            }
+            document.getElementById('remainingBalanceDisplay').style.display = 'block';
+            
+            // Update payment summary
+            document.getElementById('summaryCurrentBalance').textContent = `PKR ${balance.toFixed(2)}`;
+            document.getElementById('summaryPaymentAmount').textContent = `PKR ${amount.toFixed(2)}`;
+            document.getElementById('summaryRemainingBalance').textContent = `PKR ${remaining.toFixed(2)}`;
+            
+            // Set colors for remaining balance
+            if (remaining < 0) {
+                document.getElementById('summaryRemainingBalance').className = 'text-success fs-6';
+            } else if (remaining === 0) {
+                document.getElementById('summaryRemainingBalance').className = 'text-success fs-6';
+            } else {
+                document.getElementById('summaryRemainingBalance').className = 'text-danger fs-6';
+            }
+            
+            document.getElementById('paymentSummaryCard').style.display = 'block';
+        } else {
+            document.getElementById('remainingBalanceDisplay').style.display = 'none';
+            document.getElementById('paymentSummaryCard').style.display = 'none';
+        }
+    }
+
+    // Enhanced quick payment buttons
+    document.getElementById('payFullBalance').addEventListener('click', function() {
+        const selectedOption = supplierSelect.options[supplierSelect.selectedIndex];
+        const balance = parseFloat(selectedOption.dataset.balance) || 0;
+        if (balance > 0) {
+            paymentAmount.value = balance.toFixed(2);
+            updatePaymentHelpText(balance);
+            updateRemainingBalance(balance);
+            paymentAmount.focus();
+        }
+    });
+
+    document.getElementById('payHalfBalance').addEventListener('click', function() {
+        const selectedOption = supplierSelect.options[supplierSelect.selectedIndex];
+        const balance = parseFloat(selectedOption.dataset.balance) || 0;
+        if (balance > 0) {
+            const halfAmount = balance / 2;
+            paymentAmount.value = halfAmount.toFixed(2);
+            updatePaymentHelpText(halfAmount);
+            updateRemainingBalance(halfAmount);
+            paymentAmount.focus();
+        }
+    });
+
+    document.getElementById('payQuarterBalance').addEventListener('click', function() {
+        const selectedOption = supplierSelect.options[supplierSelect.selectedIndex];
+        const balance = parseFloat(selectedOption.dataset.balance) || 0;
+        if (balance > 0) {
+            const quarterAmount = balance / 4;
+            paymentAmount.value = quarterAmount.toFixed(2);
+            updatePaymentHelpText(quarterAmount);
+            updateRemainingBalance(quarterAmount);
+            paymentAmount.focus();
+        }
+    });
+
+    // Enhanced form validation on blur
+    document.querySelectorAll('input, select').forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.hasAttribute('required') && !this.value) {
+                this.classList.add('is-invalid');
+            } else if (this.hasAttribute('required') && this.value) {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            }
+        });
+    });
+
+    // Add form validation class on first submit attempt
+    form.addEventListener('submit', function() {
+        form.classList.add('was-validated');
+    });
+
+    // Enhanced accessibility
+    document.querySelectorAll('.form-control, .form-select').forEach(input => {
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const nextInput = this.parentElement.nextElementSibling?.querySelector('input, select, textarea');
+                if (nextInput) {
+                    nextInput.focus();
+                }
+            }
+        });
+    });
+
+    // Auto-format payment amount
+    paymentAmount.addEventListener('blur', function() {
+        if (this.value) {
+            const amount = parseFloat(this.value);
+            if (!isNaN(amount)) {
+                this.value = amount.toFixed(2);
+            }
+        }
+    });
+
+    // Enhanced mobile experience
+    if (window.innerWidth <= 768) {
+        document.querySelectorAll('.form-control-lg, .form-select-lg').forEach(input => {
+            input.classList.remove('form-control-lg', 'form-select-lg');
+        });
     }
 });
 </script>
