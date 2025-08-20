@@ -15,17 +15,52 @@ function get_next_invoice_no($pdo) {
 
 // Handle Add Purchase
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
-    $supplier_id = $_POST['supplier_id'];
-    $purchase_no = $_POST['purchase_no'];
-    $purchase_date = $_POST['purchase_date'];
+    // CSRF Protection
+    if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+        $error = "Invalid request. Please try again.";
+        header("Location: add_purchase.php?error=" . urlencode($error));
+        exit;
+    }
+    
+    // Sanitize and validate inputs
+    $supplier_id = sanitize_input($_POST['supplier_id']);
+    $purchase_no = sanitize_input($_POST['purchase_no']);
+    $purchase_date = sanitize_input($_POST['purchase_date']);
     $subtotal = floatval($_POST['subtotal']);
     $discount = floatval($_POST['discount'] ?? 0);
     $total_amount = floatval($_POST['total_amount']);
     $paid_amount = floatval($_POST['paid_amount'] ?? 0);
     $due_amount = floatval($_POST['due_amount'] ?? 0);
     $payment_method_id = $_POST['payment_method_id'] ?? null;
-    $notes = $_POST['notes'] ?? '';
+    $notes = sanitize_input($_POST['notes'] ?? '');
     $created_by = $_SESSION['user_id'];
+    
+    // Validate inputs
+    if (empty($supplier_id) || empty($purchase_no) || empty($purchase_date)) {
+        $error = "All required fields must be filled.";
+        header("Location: add_purchase.php?error=" . urlencode($error));
+        exit;
+    }
+    
+    // Validate date
+    if (!strtotime($purchase_date)) {
+        $error = "Invalid purchase date.";
+        header("Location: add_purchase.php?error=" . urlencode($error));
+        exit;
+    }
+    
+    // Validate amounts
+    if ($subtotal < 0 || $discount < 0 || $total_amount < 0 || $paid_amount < 0 || $due_amount < 0) {
+        $error = "Invalid amounts. All amounts must be positive.";
+        header("Location: add_purchase.php?error=" . urlencode($error));
+        exit;
+    }
+    
+    if ($paid_amount > $total_amount) {
+        $error = "Paid amount cannot exceed total amount.";
+        header("Location: add_purchase.php?error=" . urlencode($error));
+        exit;
+    }
 
     try {
         $pdo->beginTransaction();
@@ -36,15 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
 
         // Handle purchase items
         $product_ids = $_POST['product_id'];
-        $colors = $_POST['color'] ?? [];
-        $custom_colors = $_POST['custom_color'] ?? [];
         $quantities = $_POST['quantity'];
         $unit_prices = $_POST['unit_price'];
         $total_prices = $_POST['total_price'];
         
-        // Debug: Log color data
-
-
         for ($i = 0; $i < count($product_ids); $i++) {
             if (!empty($product_ids[$i])) {
                 // Get product details for product_code
@@ -53,18 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_purchase'])) {
                 $product = $stmt->fetch(PDO::FETCH_ASSOC);
                 $product_code = $product ? $product['product_code'] : '';
                 
-                // Determine the final color value
+                // No color information needed for electronics
                 $color = '';
-                if (isset($colors[$i]) && $colors[$i] === 'custom') {
-                    // If custom is selected, use the custom color input
-                    $color = $custom_colors[$i] ?? '';
-                } elseif (isset($colors[$i]) && $colors[$i] !== '') {
-                    // If a predefined color is selected
-                    $color = $colors[$i];
-                }
-                
-                // Debug: Log color/names being inserted
-    
                 
                 $stmt = $pdo->prepare("INSERT INTO purchase_items (purchase_id, product_id, product_code, color, purchase_price, sale_price, quantity, purchase_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$purchase_id, $product_ids[$i], $product_code, $color, $unit_prices[$i], $unit_prices[$i], $quantities[$i], $total_prices[$i]]);
@@ -228,9 +248,9 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="mb-0"><i class="bi bi-cart-plus text-primary"></i> Add New Purchase</h2>
+                <h2 class="mb-0"><i class="bi bi-cart-plus text-primary"></i> Add New Electronics Purchase</h2>
                 <!-- <a href="purchases.php" class="btn btn-secondary">
                     <i class="bi bi-list-ul"></i> View Purchase History
                 </a> -->
@@ -253,10 +273,13 @@ include 'includes/header.php';
             <!-- Add Purchase Form -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-cart-plus"></i> Create New Purchase</h5>
+                    <h5 class="mb-0"><i class="bi bi-cart-plus"></i> Create New Electronics Purchase</h5>
                 </div>
                 <div class="card-body">
                     <form method="post" id="purchaseForm">
+                        <!-- CSRF Protection -->
+                        <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+                        
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Supplier</label>
@@ -308,22 +331,7 @@ include 'includes/header.php';
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label small">Color/Names</label>
-                                        <select name="color[]" class="form-control color-select" style="height: 38px;">
-                                            <option value="">Select Color</option>
-                                            <option value="Red">Red</option>
-                                            <option value="Blue">Blue</option>
-                                            <option value="Green">Green</option>
-                                            <option value="Yellow">Yellow</option>
-                                            <option value="Black">Black</option>
-                                            <option value="White">White</option>
-                                            <option value="Purple">Purple</option>
-                                            <option value="custom">+ Add Custom Color</option>
-                                        </select>
-                                        <input type="text" name="custom_color[]" class="form-control custom-color-input mt-1" placeholder="Enter custom color names" style="height: 32px; display: none;">
-                                        <!-- <small class="text-muted">Select from list or add custom names</small> -->
-                                    </div>
+
                                     <div class="col-md-2">
                                         <label class="form-label small">Quantity</label>
                                         <input type="number" step="0.01" name="quantity[]" class="form-control quantity" placeholder="Qty" required>
@@ -392,7 +400,7 @@ include 'includes/header.php';
                             </div>
                         </div>
                         
-                        <button type="submit" class="btn btn-primary" name="add_purchase">Add Purchase</button>
+                        <button type="submit" class="btn btn-primary" name="add_purchase">Add Electronics Purchase</button>
                     </form>
                 </div>
             </div>
@@ -489,12 +497,7 @@ document.getElementById('addItem').addEventListener('click', function() {
         input.value = '';
     });
     
-    // Hide custom color input in new row
-    const customColorInput = newRow.querySelector('.custom-color-input');
-    if (customColorInput) {
-        customColorInput.style.display = 'none';
-        customColorInput.required = false;
-    }
+
     
     container.appendChild(newRow);
     
@@ -574,38 +577,9 @@ function calculateGrandTotal() {
 document.addEventListener('DOMContentLoaded', function() {
     calculateGrandTotal();
     
-    // Initialize color dropdown functionality
-    initializeColorDropdowns();
+
     
-    // Form validation for colors/names
-    document.getElementById('purchaseForm').addEventListener('submit', function(e) {
-        const colorSelects = document.querySelectorAll('select[name="color[]"]');
-        const customColorInputs = document.querySelectorAll('input[name="custom_color[]"]');
-        let isValid = true;
-        
-                colorSelects.forEach((select, index) => {
-            if (select.value === 'custom') {
-                // Check if custom color input has value
-                const customInput = select.closest('.row').querySelector('.custom-color-input');
-                
-                if (!customInput.value.trim()) {
-                    showNotification(`Please enter a custom color name for item ${index + 1}`, 'warning');
-                    isValid = false;
-                    e.preventDefault();
-                    return;
-                }
-            } else if (select.value === '') {
-                showNotification(`Please select a color for item ${index + 1}`, 'warning');
-                isValid = false;
-                    e.preventDefault();
-                    return;
-            }
-        });
-        
-        if (!isValid) {
-            e.preventDefault();
-        }
-    });
+
 });
 
 // Initialize supplier dropdown functionality
@@ -682,25 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Color dropdown functionality
-function initializeColorDropdowns() {
-    document.addEventListener('change', function(e) {
-        if (e.target.classList.contains('color-select')) {
-            const row = e.target.closest('.row');
-            const customInput = row.querySelector('.custom-color-input');
-            
-            if (e.target.value === 'custom') {
-                customInput.style.display = 'block';
-                customInput.required = true;
-                e.target.required = false;
-            } else {
-                customInput.style.display = 'none';
-                customInput.required = false;
-                e.target.required = true;
-            }
-        }
-    });
-}
+
 
 
 

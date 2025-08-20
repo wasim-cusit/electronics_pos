@@ -356,7 +356,7 @@ include 'includes/header.php';
   }
 </style>
 <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0"><i class="bi bi-clipboard-plus text-primary"></i> Create New Order</h2>
             </div>

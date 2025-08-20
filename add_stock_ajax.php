@@ -11,21 +11,43 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// CSRF Protection
+if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Invalid request. Please try again.']);
+    exit;
+}
+
 try {
+    // Get and validate inputs
     $product_id = intval($_POST['product_id']);
     $quantity = floatval($_POST['quantity']);
     $purchase_price = floatval($_POST['purchase_price']);
     $sale_price = floatval($_POST['sale_price']);
-    $stock_date = $_POST['stock_date'];
+    $stock_date = sanitize_input($_POST['stock_date']);
     
     // Validate inputs
     if ($product_id <= 0 || $quantity <= 0 || $purchase_price < 0 || $sale_price < 0) {
         throw new Exception('Invalid input parameters');
     }
     
+    // Validate date
+    if (!validate_date($stock_date)) {
+        throw new Exception('Invalid stock date');
+    }
+    
     // Validate sale price is not less than purchase price
     if ($sale_price < $purchase_price) {
         throw new Exception('Sale price cannot be less than purchase price');
+    }
+    
+    // Validate quantity and prices are reasonable
+    if ($quantity > 10000) {
+        throw new Exception('Quantity is too high');
+    }
+    
+    if ($purchase_price > 1000000 || $sale_price > 1000000) {
+        throw new Exception('Price is too high');
     }
     
     // Get product information

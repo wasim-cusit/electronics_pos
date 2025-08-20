@@ -14,7 +14,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_return'])) {
     $supplier_id = !empty($_POST['supplier_id']) ? intval($_POST['supplier_id']) : null;
     $fabric_name = trim($_POST['fabric_name']);
     $fabric_type = trim($_POST['fabric_type']);
-    $color = trim($_POST['color']);
     $quantity = floatval($_POST['quantity']);
     $unit = trim($_POST['unit']);
     $original_price = floatval($_POST['original_price']);
@@ -54,8 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_return'])) {
         exit;
     }
 
-    $stmt = $pdo->prepare("INSERT INTO return_percale (return_no, return_type, customer_id, supplier_id, fabric_name, fabric_type, color, quantity, unit, original_price, return_price, return_reason, return_date, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$return_no, $return_type, $customer_id, $supplier_id, $fabric_name, $fabric_type, $color, $quantity, $unit, $original_price, $return_price, $return_reason, $return_date, $notes, $_SESSION['user_id']]);
+    $stmt = $pdo->prepare("INSERT INTO return_percale (return_no, return_type, customer_id, supplier_id, fabric_name, fabric_type, quantity, unit, original_price, return_price, return_reason, return_date, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$return_no, $return_type, $customer_id, $supplier_id, $fabric_name, $fabric_type, $quantity, $unit, $original_price, $return_price, $return_reason, $return_date, $notes, $_SESSION['user_id']]);
 
     header("Location: return_percale.php?success=added");
     exit;
@@ -69,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_return'])) {
     $supplier_id = !empty($_POST['supplier_id']) ? intval($_POST['supplier_id']) : null;
     $fabric_name = trim($_POST['fabric_name']);
     $fabric_type = trim($_POST['fabric_type']);
-    $color = trim($_POST['color']);
     $quantity = floatval($_POST['quantity']);
     $unit = trim($_POST['unit']);
     $original_price = floatval($_POST['original_price']);
@@ -92,8 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_return'])) {
         exit;
     }
 
-    $stmt = $pdo->prepare("UPDATE return_percale SET return_type=?, customer_id=?, supplier_id=?, fabric_name=?, fabric_type=?, color=?, quantity=?, unit=?, original_price=?, return_price=?, return_reason=?, return_date=?, notes=? WHERE id=?");
-    $stmt->execute([$return_type, $customer_id, $supplier_id, $fabric_name, $fabric_type, $color, $quantity, $unit, $original_price, $return_price, $return_reason, $return_date, $notes, $id]);
+    $stmt = $pdo->prepare("UPDATE return_percale SET return_type=?, customer_id=?, supplier_id=?, fabric_name=?, fabric_type=?, quantity=?, unit=?, original_price=?, return_price=?, return_reason=?, return_date=?, notes=? WHERE id=?");
+    $stmt->execute([$return_type, $customer_id, $supplier_id, $fabric_name, $fabric_type, $quantity, $unit, $original_price, $return_price, $return_reason, $return_date, $notes, $id]);
 
     header("Location: return_percale.php?success=updated");
     exit;
@@ -230,7 +228,7 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <h2 class="mb-4">Return Percale Management</h2>
 
             <?php if (isset($_GET['success'])): ?>
@@ -355,22 +353,16 @@ include 'includes/header.php';
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="mb-3">
                                     <label for="fabric_name" class="form-label">Fabric Name *</label>
                                     <input type="text" class="form-control" id="fabric_name" name="fabric_name" value="<?= $edit_return ? htmlspecialchars($edit_return['fabric_name']) : '' ?>" required>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-4">
                                 <div class="mb-3">
                                     <label for="fabric_type" class="form-label">Fabric Type</label>
                                     <input type="text" class="form-control" id="fabric_type" name="fabric_type" value="<?= $edit_return ? htmlspecialchars($edit_return['fabric_type']) : '' ?>" placeholder="e.g., Cotton, Silk, Polyester">
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="mb-3">
-                                    <label for="color" class="form-label">Color</label>
-                                    <input type="text" class="form-control" id="color" name="color" value="<?= $edit_return ? htmlspecialchars($edit_return['color']) : '' ?>" placeholder="e.g., Red, Blue, White">
                                 </div>
                             </div>
                             <div class="col-md-2">
@@ -395,23 +387,23 @@ include 'includes/header.php';
 
 
                         <div class="row">
-                            <div class="col-md-2">
+                            <div class="col-md-3">
                                 <div class="mb-3">
                                     <label for="original_price" class="form-label">Original Price *</label>
                                     <input type="number" class="form-control" id="original_price" name="original_price" value="<?= $edit_return ? $edit_return['original_price'] : '' ?>" step="0.01" min="0.01" required>
                                 </div>
                             </div>
-                            <div class="col-md-2">
+                            <div class="col-md-3">
                                 <div class="mb-3">
                                     <label for="return_price" class="form-label">Return Price *</label>
                                     <input type="number" class="form-control" id="return_price" name="return_price" value="<?= $edit_return ? $edit_return['return_price'] : '' ?>" step="0.01" min="0.01" required>
                                 </div>
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="return_reason" class="form-label">Return Reason</label>
                                 <textarea class="form-control" id="return_reason" name="return_reason" rows="3" placeholder="Describe the reason for return..."><?= $edit_return ? htmlspecialchars($edit_return['return_reason']) : '' ?></textarea>
                             </div>
-                            <div class="col-md-4 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="notes" class="form-label">Additional Notes</label>
                                 <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Any additional notes..."><?= $edit_return ? htmlspecialchars($edit_return['notes']) : '' ?></textarea>
                             </div>
@@ -533,9 +525,6 @@ include 'includes/header.php';
                                                     <strong><?= htmlspecialchars($return['fabric_name']) ?></strong>
                                                     <?php if ($return['fabric_type']): ?>
                                                         <br><small class="text-muted"><?= htmlspecialchars($return['fabric_type']) ?></small>
-                                                    <?php endif; ?>
-                                                    <?php if ($return['color']): ?>
-                                                        <br><small class="text-muted">Color: <?= htmlspecialchars($return['color']) ?></small>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>

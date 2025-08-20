@@ -230,20 +230,65 @@ $customers = $pdo->query("SELECT * FROM customer ORDER BY name")->fetchAll(PDO::
 $products = $pdo->query("SELECT p.*, COALESCE(SUM(si.quantity), 0) as stock_quantity, ROUND(COALESCE(SUM(si.quantity * si.sale_price) / SUM(si.quantity), 0), 2) as sale_price, ROUND(COALESCE(SUM(si.quantity * si.purchase_price) / SUM(si.quantity), 0), 2) as purchase_price FROM products p LEFT JOIN stock_items si ON p.id = si.product_id AND si.status = 'available' GROUP BY p.id HAVING stock_quantity > 0 ORDER BY p.product_name")->fetchAll(PDO::FETCH_ASSOC);
 $payment_methods = $pdo->query("SELECT * FROM payment_method WHERE status = 1 ORDER BY method")->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch all sales
-$sales = $pdo->query("SELECT s.*, COALESCE(c.name, s.walk_in_cust_name) AS customer_name, c.mobile AS customer_mobile, u.username AS created_by_name FROM sale s LEFT JOIN customer c ON s.customer_id = c.id LEFT JOIN system_users u ON s.created_by = u.id ORDER BY s.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+// Handle search functionality with validation
+$search = sanitize_input($_GET['search'] ?? '');
+$customer_filter = sanitize_input($_GET['customer_filter'] ?? '');
+
+// Build the sales query with search filters
+$sales_query = "SELECT s.*, COALESCE(c.name, s.walk_in_cust_name) AS customer_name, c.mobile AS customer_mobile, u.username AS created_by_name 
+                FROM sale s 
+                LEFT JOIN customer c ON s.customer_id = c.id 
+                LEFT JOIN system_users u ON s.created_by = u.id 
+                WHERE 1=1";
+
+$params = [];
+
+if (!empty($search)) {
+    // Limit search length to prevent abuse
+    if (strlen($search) > 100) {
+        $search = substr($search, 0, 100);
+    }
+    
+    $sales_query .= " AND (s.sale_no LIKE ? OR s.walk_in_cust_name LIKE ? OR c.name LIKE ? OR c.mobile LIKE ?)";
+    $search_param = "%$search%";
+    $params = array_merge($params, [$search_param, $search_param, $search_param, $search_param]);
+}
+
+if (!empty($customer_filter)) {
+    // Validate customer filter
+    if (is_numeric($customer_filter)) {
+        $sales_query .= " AND (c.id = ? OR (s.customer_id IS NULL AND s.walk_in_cust_name LIKE ?))";
+        $params[] = intval($customer_filter);
+        $params[] = "%$customer_filter%";
+    } else {
+        // If not numeric, treat as text search
+        $sales_query .= " AND (s.walk_in_cust_name LIKE ? OR c.name LIKE ?)";
+        $params[] = "%$customer_filter%";
+        $params[] = "%$customer_filter%";
+    }
+}
+
+$sales_query .= " ORDER BY s.id DESC";
+
+// Execute the query with parameters
+try {
+    $stmt = $pdo->prepare($sales_query);
+    $stmt->execute($params);
+    $sales = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    error_log("Sales search error: " . $e->getMessage());
+    $sales = [];
+    $error = "Error performing search. Please try again.";
+}
 
 include 'includes/header.php';
 ?>
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0"><i class="bi bi-list-ul text-primary"></i> Sales History</h2>
-                <!-- <a href="add_sale.php" class="btn btn-primary">
-                    <i class="bi bi-cart-plus"></i> Add New Sale
-                </a> -->
             </div>
             
 
@@ -267,6 +312,70 @@ include 'includes/header.php';
 
 
             
+
+            <!-- Search and Filter Section -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-search me-2"></i>Search & Filter Sales
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="search" class="form-label">Search Sales</label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="search" name="search" 
+                                       placeholder="Search by invoice, customer name, or mobile..." 
+                                       value="<?= htmlspecialchars($search) ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="customer_filter" class="form-label">Filter by Customer</label>
+                            <select class="form-select" id="customer_filter" name="customer_filter">
+                                <option value="">All Customers</option>
+                                <?php foreach ($customers as $customer): ?>
+                                    <option value="<?= $customer['id'] ?>" <?= ($customer_filter == $customer['id']) ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($customer['name']) ?> (<?= htmlspecialchars($customer['mobile']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-search me-2"></i>Search
+                                </button>
+                                <a href="sales.php" class="btn btn-secondary">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Clear
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Search Results Summary -->
+                    <?php if (!empty($search) || !empty($customer_filter)): ?>
+                        <div class="mt-3 p-3 bg-info bg-opacity-10 border border-info rounded">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-info-circle text-info me-2"></i>
+                                <div>
+                                    <strong>Search Results:</strong>
+                                    <?php if (!empty($search)): ?>
+                                        <span class="badge bg-primary ms-2">Search: "<?= htmlspecialchars($search) ?>"</span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($customer_filter)): ?>
+                                        <span class="badge bg-success ms-2">Customer Filter Applied</span>
+                                    <?php endif; ?>
+                                    <span class="badge bg-secondary ms-2">Found: <?= count($sales) ?> sales</span>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
 
             <!-- Sale List Table -->
             <div class="card border-0 shadow-lg">
@@ -495,6 +604,30 @@ include 'includes/header.php';
     padding: 12px 24px;
     font-size: 1.1rem;
     font-weight: 500;
+}
+
+/* Search and filter section styling */
+.card-header.bg-light {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.search-results-summary {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    border: 1px solid #bee5eb;
+    border-radius: 8px;
+}
+
+/* Enhanced form controls */
+.form-control:focus, .form-select:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #6c757d;
 }
 
 /* Success/error message enhancements */
@@ -805,8 +938,7 @@ function sendWhatsAppMessage() {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            alert('Error: Could not load sale data');
+            // Handle error silently
         });
 }
 

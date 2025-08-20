@@ -7,26 +7,30 @@ $activePage = 'add_product';
 
 // Handle Edit Product
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_product'])) {
-    $id = $_POST['id'];
-    $name = trim($_POST['name']);
-    $category_id = $_POST['category_id'];
-    $unit = $_POST['unit'];
-    $brand = trim($_POST['brand']);
-    $low_stock_threshold = $_POST['low_stock_threshold'];
-    $description = trim($_POST['description'] ?? '');
-    $product_code = trim($_POST['product_code']);
-    $color = trim($_POST['color'] ?? '');
+    // CSRF Protection
+    if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+        $error = "Invalid request. Please try again.";
+        header("Location: add_product.php?error=" . urlencode($error));
+        exit;
+    }
+    
+    $id = intval($_POST['id']);
+    $name = sanitize_input(trim($_POST['name']));
+    $category_id = intval($_POST['category_id']);
+    $unit = sanitize_input($_POST['unit']);
+    $low_stock_threshold = intval($_POST['low_stock_threshold']);
+    $description = sanitize_input(trim($_POST['description'] ?? ''));
+    $product_code = sanitize_input(trim($_POST['product_code']));
 
     // Validate required fields
     if (empty($name) || empty($category_id) || empty($unit) || empty($low_stock_threshold)) {
         $error = "Please fill in all required fields.";
+    } elseif ($low_stock_threshold < 0) {
+        $error = "Low stock threshold must be a positive number.";
     } else {
-        // Set defaults for optional fields
-        $brand = $brand ?: 'Generic';
-
         try {
-            $stmt = $pdo->prepare("UPDATE products SET product_name=?, category_id=?, product_unit=?, brand=?, alert_quantity=?, description=?, product_code=?, color=? WHERE id=?");
-            $stmt->execute([$name, $category_id, $unit, $brand, $low_stock_threshold, $description, $product_code, $color, $id]);
+            $stmt = $pdo->prepare("UPDATE products SET product_name=?, category_id=?, product_unit=?, alert_quantity=?, description=?, product_code=? WHERE id=?");
+            $stmt->execute([$name, $category_id, $unit, $low_stock_threshold, $description, $product_code, $id]);
             header("Location: add_product.php?success=updated&product_id=" . $id);
             exit;
         } catch (Exception $e) {
@@ -37,28 +41,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_product'])) {
 
 // Handle Add Product
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
-    $name = trim($_POST['name']);
-    $category_id = $_POST['category_id'];
-    $unit = $_POST['unit'];
-    $brand = trim($_POST['brand']);
-    $low_stock_threshold = $_POST['low_stock_threshold'];
-    $description = trim($_POST['description'] ?? '');
-    $product_code = trim($_POST['product_code']);
-    $color = trim($_POST['color'] ?? '');
+    // CSRF Protection
+    if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+        $error = "Invalid request. Please try again.";
+        header("Location: add_product.php?error=" . urlencode($error));
+        exit;
+    }
+    
+    $name = sanitize_input(trim($_POST['name']));
+    $category_id = intval($_POST['category_id']);
+    $unit = sanitize_input($_POST['unit']);
+    $low_stock_threshold = intval($_POST['low_stock_threshold']);
+    $description = sanitize_input(trim($_POST['description'] ?? ''));
+    $product_code = sanitize_input(trim($_POST['product_code']));
 
     // Validate required fields
     if (empty($name) || empty($category_id) || empty($unit) || empty($low_stock_threshold)) {
         $error = "Please fill in all required fields.";
+    } elseif ($low_stock_threshold < 0) {
+        $error = "Low stock threshold must be a positive number.";
     } else {
-        // Set defaults for optional fields
-        $brand = $brand ?: 'Generic';
-
         try {
             $pdo->beginTransaction();
             
             // Insert product
-            $stmt = $pdo->prepare("INSERT INTO products (product_name, category_id, product_unit, brand, alert_quantity, description, product_code, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$name, $category_id, $unit, $brand, $low_stock_threshold, $description, $product_code, $color]);
+            $stmt = $pdo->prepare("INSERT INTO products (product_name, category_id, product_unit, alert_quantity, description, product_code) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$name, $category_id, $unit, $low_stock_threshold, $description, $product_code]);
             $product_id = $pdo->lastInsertId();
             
             $pdo->commit();
@@ -89,9 +97,9 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="mb-0"><i class="bi bi-box-seam text-primary"></i> <?= $edit_product ? "Edit Product" : "Add New Product" ?></h2>
+                <h2 class="mb-0"><i class="bi bi-box-seam text-primary"></i> <?= $edit_product ? "Edit Electronics Product" : "Add New Electronics Product" ?></h2>
                 <div class="d-flex">
                     <!-- <a href="products.php" class="btn btn-info me-2">
                         <i class="bi bi-eye"></i> Product Details
@@ -122,10 +130,13 @@ include 'includes/header.php';
             <!-- Add/Edit Product Form -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> <?= $edit_product ? "Edit Product" : "Create New Product" ?></h5>
+                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> <?= $edit_product ? "Edit Electronics Product" : "Create New Electronics Product" ?></h5>
                 </div>
                 <div class="card-body">
                     <form method="post" id="addProductForm">
+                        <!-- CSRF Protection -->
+                        <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+                        
                         <?php if ($edit_product): ?>
                             <input type="hidden" name="id" value="<?= $edit_product['id'] ?>">
                         <?php endif; ?>
@@ -147,36 +158,29 @@ include 'includes/header.php';
                                 <label class="form-label">Unit *</label>
                                 <select name="unit" class="form-control" required>
                                     <option value="">Select Unit</option>
-                                    <option value="meter" <?= (isset($edit_product['product_unit']) && $edit_product['product_unit'] == 'meter') ? 'selected' : '' ?>>Meter</option>
                                     <option value="piece" <?= (isset($edit_product['product_unit']) && $edit_product['product_unit'] == 'piece') ? 'selected' : '' ?>>Piece</option>
+                                    <option value="unit" <?= (isset($edit_product['product_unit']) && $edit_product['product_unit'] == 'unit') ? 'selected' : '' ?>>Unit</option>
                                     <option value="set" <?= (isset($edit_product['product_unit']) && $edit_product['product_unit'] == 'set') ? 'selected' : '' ?>>Set</option>
+                                    <option value="box" <?= (isset($edit_product['product_unit']) && $edit_product['product_unit'] == 'box') ? 'selected' : '' ?>>Box</option>
+                                    <option value="pack" <?= (isset($edit_product['product_unit']) && $edit_product['product_unit'] == 'pack') ? 'selected' : '' ?>>Pack</option>
                                 </select>
                             </div>
                             <div class="col-md-2 mb-3">
                                 <label class="form-label">Product Code</label>
                                 <input type="text" name="product_code" class="form-control" placeholder="Enter product code or barcode" value="<?= htmlspecialchars($edit_product['product_code'] ?? '') ?>">
                             </div>
-                            <div class="col-md-2 mb-3">
-                                <label class="form-label">Color</label>
-                                <input type="text" name="color" class="form-control" placeholder="Enter color (e.g., Red, Blue, Black)" value="<?= htmlspecialchars($edit_product['color'] ?? '') ?>">
-                                <small class="text-muted">Specify product color</small>
-                            </div>
+
                         </div>
 
                         <div class="row">
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Brand</label>
-                                <input type="text" name="brand" class="form-control" placeholder="Enter brand name" value="<?= htmlspecialchars($edit_product['brand'] ?? '') ?>">
-
-                            </div>
-                            <div class="col-md-3 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Low Stock Alert *</label>
                                 <input type="number" step="0.01" name="low_stock_threshold" class="form-control" required placeholder="Enter threshold value" value="<?= htmlspecialchars($edit_product['alert_quantity'] ?? '') ?>">
                                 <small class="text-muted">Alert when stock falls below this value</small>
                             </div>
-                            <div class="col-md-5 mb-3">
+                            <div class="col-md-8 mb-3">
                                 <label class="form-label">Description</label>
-                                <textarea name="description" class="form-control" rows="3" placeholder="Enter product description, features, or specifications"><?= htmlspecialchars($edit_product['description'] ?? '') ?></textarea>
+                                <textarea name="description" class="form-control" rows="3" placeholder="Enter product description, features, specifications, or technical details"><?= htmlspecialchars($edit_product['description'] ?? '') ?></textarea>
                             </div>
                         </div>
 
@@ -184,7 +188,7 @@ include 'includes/header.php';
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary" name="<?= $edit_product ? 'edit_product' : 'add_product' ?>">
-                                <i class="bi bi-<?= $edit_product ? 'check-circle' : 'plus-circle' ?>"></i> <?= $edit_product ? 'Update Product' : 'Add Product' ?>
+                                <i class="bi bi-<?= $edit_product ? 'check-circle' : 'plus-circle' ?>"></i> <?= $edit_product ? 'Update Electronics Product' : 'Add Electronics Product' ?>
                             </button>
                             <?php if ($edit_product): ?>
                                 <a href="products.php" class="btn btn-secondary">

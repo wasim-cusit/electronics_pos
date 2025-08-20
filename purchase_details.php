@@ -47,9 +47,9 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>📋 Purchase Details</h2>
+                <h2>📋 Electronics Purchase Details</h2>
                 <div>
                     <a href="purchases.php" class="btn btn-secondary">
                         <i class="bi bi-arrow-left"></i> Back to Purchases
@@ -65,7 +65,7 @@ include 'includes/header.php';
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="mb-0">📄 Purchase Information</h5>
+                            <h5 class="mb-0">📄 Electronics Purchase Information</h5>
                         </div>
                         <div class="card-body">
                             <table class="table table-borderless">
@@ -124,9 +124,9 @@ include 'includes/header.php';
 
             <!-- Purchase Items Table -->
             <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">📦 Purchase Items (<?= count($purchase_items) ?> items)</h5>
-                </div>
+                                        <div class="card-header">
+                            <h5 class="mb-0">📦 Electronics Purchase Items (<?= count($purchase_items) ?> items)</h5>
+                        </div>
                 <div class="card-body table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead>
@@ -134,7 +134,6 @@ include 'includes/header.php';
                                 <th>#</th>
                                 <th>Product Name</th>
                                 <th>Category</th>
-                                <th>Color</th>
                                 <th>Unit</th>
                                 <th>Quantity</th>
                                 <th>Unit Price</th>
@@ -158,15 +157,6 @@ include 'includes/header.php';
                                         <span class="badge bg-info">
                                             <?= htmlspecialchars($item['category_name'] ?? 'N/A') ?>
                                         </span>
-                                    </td>
-                                    <td>
-                                        <?php if (!empty($item['color'])): ?>
-                                            <span class="badge bg-light text-dark border">
-                                                <?= htmlspecialchars($item['color']) ?>
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="text-muted">No color specified</span>
-                                        <?php endif; ?>
                                     </td>
                                     <td><?= htmlspecialchars($item['product_unit']) ?></td>
                                     <td>
@@ -192,7 +182,7 @@ include 'includes/header.php';
                             <?php endforeach; ?>
                             <?php if (empty($purchase_items)): ?>
                                 <tr>
-                                    <td colspan="10" class="text-center text-muted">
+                                    <td colspan="9" class="text-center text-muted">
                                         <i class="bi bi-inbox"></i> No items found for this purchase.
                                     </td>
                                 </tr>
@@ -200,7 +190,7 @@ include 'includes/header.php';
                         </tbody>
                         <tfoot>
                             <tr class="table-info">
-                                <td colspan="5"><strong>Summary:</strong></td>
+                                <td colspan="4"><strong>Summary:</strong></td>
                                 <td><strong><?= number_format($total_items, 2) ?> total units</strong></td>
                                 <td><strong>Total:</strong></td>
                                 <td><strong>PKR <?= number_format($purchase['total_amount'], 2) ?></strong></td>

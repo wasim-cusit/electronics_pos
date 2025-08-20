@@ -32,7 +32,7 @@ try {
             $pdo->exec("INSERT INTO `roles` (`id`, `role_name`, `permissions`) VALUES
                 (1, 'Admin', 'all'),
                 (2, 'Manager', 'sales,purchases,customers,suppliers,reports'),
-                (3, 'Tailor', 'sales,customers'),
+                -- (3, 'Tailor', 'sales,customers'),
                 (4, 'Cashier', 'sales,customers')");
             echo "✅ Inserted default roles<br>";
         } else {

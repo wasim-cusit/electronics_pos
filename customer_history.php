@@ -66,7 +66,7 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4" style="margin-top: 25px;">
             
             <!-- Breadcrumb -->
             <nav aria-label="breadcrumb">

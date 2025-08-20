@@ -164,11 +164,16 @@ CREATE TABLE `categories` (
 --
 
 INSERT INTO `categories` (`id`, `category`, `description`, `status`, `created_at`) VALUES
-(1, 'Shirts', 'All types of shirts', 1, '2025-08-11 11:31:37'),
-(2, 'Pants', 'All types of pants', 1, '2025-08-11 11:31:37'),
-(3, 'Suits', 'Formal suits and blazers', 1, '2025-08-11 11:31:37'),
-(4, 'Dresses', 'All types of dresses', 1, '2025-08-11 11:31:37'),
-(5, 'Alterations', 'Clothing alterations and repairs', 1, '2025-08-11 11:31:37');
+(1, 'Air Conditioners', 'AC units, split AC, window AC, portable AC', 1, '2025-08-18 15:00:00'),
+(2, 'Fragrances & Perfumes', 'Men and women perfumes, body sprays, deodorants', 1, '2025-08-18 15:00:00'),
+(3, 'Mobile Phones', 'Smartphones, feature phones, accessories', 1, '2025-08-18 15:00:00'),
+(4, 'Laptops & Computers', 'Laptops, desktops, tablets, accessories', 1, '2025-08-18 15:00:00'),
+(5, 'Home Appliances', 'Refrigerators, washing machines, microwaves', 1, '2025-08-18 15:00:00'),
+(6, 'TV & Audio', 'Televisions, speakers, headphones, sound systems', 1, '2025-08-18 15:00:00'),
+(7, 'Kitchen Appliances', 'Blenders, mixers, toasters, coffee makers', 1, '2025-08-18 15:00:00'),
+(8, 'Gaming & Entertainment', 'Gaming consoles, controllers, games', 1, '2025-08-18 15:00:00'),
+(9, 'Security & Surveillance', 'CCTV cameras, security systems, locks', 1, '2025-08-18 15:00:00'),
+(10, 'Lighting & Electrical', 'LED lights, switches, wiring, electrical items', 1, '2025-08-18 15:00:00');
 
 -- --------------------------------------------------------
 
@@ -213,8 +218,9 @@ INSERT INTO `cloths_orders` (`id`, `order_no`, `customer_id`, `order_date`, `del
 CREATE TABLE `customer` (
   `id` int(11) NOT NULL,
   `name` varchar(100) DEFAULT NULL,
-  `address` varchar(255) NOT NULL,
   `mobile` varchar(30) NOT NULL,
+  `cnic` varchar(15) DEFAULT NULL,
+  `address` varchar(255) NOT NULL,
   `email` varchar(100) NOT NULL,
   `opening_balance` decimal(15,2) NOT NULL DEFAULT 0.00,
   `status` tinyint(1) NOT NULL DEFAULT 1,
@@ -225,8 +231,12 @@ CREATE TABLE `customer` (
 -- Dumping data for table `customer`
 --
 
-INSERT INTO `customer` (`id`, `name`, `address`, `mobile`, `email`, `opening_balance`, `status`, `created_at`) VALUES
-(4, 'Zia Ur Rehman', 'Doctor Guest House, Street 6, Phase 4, HMC, Hayatabad', '03342332323', 'z.r@gmail.com', 0.00, 1, '2025-08-15 08:03:57');
+INSERT INTO `customer` (`id`, `name`, `mobile`, `cnic`, `email`, `address`, `opening_balance`, `status`, `created_at`) VALUES
+(1, 'Ahmed Khan', '0300-1111111', '35202-1234567-1', 'ahmed@email.com', 'House #45, Street 7, F-8/1, Islamabad', 0.00, 1, '2025-08-18 15:00:00'),
+(2, 'Fatima Ali', '0300-2222222', '35202-2345678-2', 'fatima@email.com', 'Apartment 12, Block C, Blue Area, Islamabad', 0.00, 1, '2025-08-18 15:00:00'),
+(3, 'Usman Hassan', '0300-3333333', '35202-3456789-3', 'usman@email.com', 'Shop #23, Jinnah Super Market, Islamabad', 0.00, 1, '2025-08-18 15:00:00'),
+(4, 'Ayesha Malik', '0300-4444444', '35202-4567890-4', 'ayesha@email.com', 'House #67, Street 12, G-9/1, Islamabad', 0.00, 1, '2025-08-18 15:00:00'),
+(5, 'Bilal Ahmed', '0300-5555555', '35202-5678901-5', 'bilal@email.com', 'Office #8, 3rd Floor, Centaurus Mall, Islamabad', 0.00, 1, '2025-08-18 15:00:00');
 
 -- --------------------------------------------------------
 
@@ -482,7 +492,39 @@ CREATE TABLE `products` (
 --
 
 INSERT INTO `products` (`id`, `product_name`, `brand`, `product_unit`, `size`, `color`, `product_code`, `category_id`, `alert_quantity`, `description`, `product_image`, `status`, `created_at`) VALUES
-(21, 'Royal Tag', 'Junaid Jamshed', 'meter', NULL, 'Green', '232', 1, 23, '', NULL, 1, '2025-08-14 10:37:04');
+(1, 'Split AC 1.5 Ton', 'Haier', 'piece', NULL, NULL, 'AC-001', 1, 1, 'High efficiency split air conditioner', NULL, 1, '2025-08-18 15:00:00'),
+(2, 'Window AC 1 Ton', 'Gree', 'piece', NULL, NULL, 'AC-002', 1, 1, 'Energy efficient window air conditioner', NULL, 1, '2025-08-18 15:00:00'),
+(3, 'Portable AC', 'LG', 'piece', NULL, NULL, 'AC-003', 1, 1, 'Mobile air conditioning unit', NULL, 1, '2025-08-18 15:00:00'),
+(4, 'Men\'s Cologne', 'Versace', 'piece', NULL, NULL, 'FRG-001', 2, 5, 'Luxury men\'s fragrance', NULL, 1, '2025-08-18 15:00:00'),
+(5, 'Women\'s Perfume', 'Chanel', 'piece', NULL, NULL, 'FRG-002', 2, 5, 'Elegant women\'s perfume', NULL, 1, '2025-08-18 15:00:00'),
+(6, 'Body Spray', 'Axe', 'piece', NULL, NULL, 'FRG-003', 2, 10, 'Refreshing body spray', NULL, 1, '2025-08-18 15:00:00'),
+(7, 'Deodorant Roll-on', 'Nivea', 'piece', NULL, NULL, 'FRG-004', 2, 15, 'Long-lasting deodorant', NULL, 1, '2025-08-18 15:00:00'),
+(8, 'iPhone 15 Pro', 'Apple', 'piece', NULL, NULL, 'MBL-001', 3, 2, 'Latest iPhone with advanced features', NULL, 1, '2025-08-18 15:00:00'),
+(9, 'Samsung Galaxy S24', 'Samsung', 'piece', NULL, NULL, 'MBL-002', 3, 3, 'Premium Android smartphone', NULL, 1, '2025-08-18 15:00:00'),
+(10, 'Mobile Charger', 'Anker', 'piece', NULL, NULL, 'MBL-003', 3, 20, 'Fast charging USB-C charger', NULL, 1, '2025-08-18 15:00:00'),
+(11, 'Phone Case', 'Spigen', 'piece', NULL, NULL, 'MBL-004', 3, 25, 'Protective phone case', NULL, 1, '2025-08-18 15:00:00'),
+(12, 'MacBook Air M2', 'Apple', 'piece', NULL, NULL, 'LAP-001', 4, 1, 'Lightweight laptop with M2 chip', NULL, 1, '2025-08-18 15:00:00'),
+(13, 'Dell Inspiron 15', 'Dell', 'piece', NULL, NULL, 'LAP-002', 4, 2, 'Affordable business laptop', NULL, 1, '2025-08-18 15:00:00'),
+(14, 'Wireless Mouse', 'Logitech', 'piece', NULL, NULL, 'LAP-003', 4, 15, 'Ergonomic wireless mouse', NULL, 1, '2025-08-18 15:00:00'),
+(15, 'USB Keyboard', 'Microsoft', 'piece', NULL, NULL, 'LAP-004', 4, 12, 'Comfortable USB keyboard', NULL, 1, '2025-08-18 15:00:00'),
+(16, 'Refrigerator 500L', 'Whirlpool', 'piece', NULL, NULL, 'HAP-001', 5, 1, 'Large capacity refrigerator', NULL, 1, '2025-08-18 15:00:00'),
+(17, 'Washing Machine 8kg', 'Samsung', 'piece', NULL, NULL, 'HAP-002', 5, 2, 'Front load washing machine', NULL, 1, '2025-08-18 15:00:00'),
+(18, 'Microwave Oven', 'Panasonic', 'piece', NULL, NULL, 'HAP-003', 5, 3, '20L microwave with grill', NULL, 1, '2025-08-18 15:00:00'),
+(19, 'Smart TV 55"', 'LG', 'piece', NULL, NULL, 'TVA-001', 6, 2, '4K Smart LED TV', NULL, 1, '2025-08-18 15:00:00'),
+(20, 'Bluetooth Speaker', 'JBL', 'piece', NULL, NULL, 'TVA-002', 6, 8, 'Portable wireless speaker', NULL, 1, '2025-08-18 15:00:00'),
+(21, 'Gaming Headset', 'Razer', 'piece', NULL, NULL, 'TVA-003', 6, 10, 'Professional gaming headset', NULL, 1, '2025-08-18 15:00:00'),
+(22, 'Blender 1000W', 'Philips', 'piece', NULL, NULL, 'KIT-001', 7, 5, 'High power blender', NULL, 1, '2025-08-18 15:00:00'),
+(23, 'Coffee Maker', 'Bialetti', 'piece', NULL, NULL, 'KIT-002', 7, 4, 'Italian coffee maker', NULL, 1, '2025-08-18 15:00:00'),
+(24, 'Toaster 4-Slice', 'Breville', 'piece', NULL, NULL, 'KIT-003', 7, 6, '4-slice toaster with timer', NULL, 1, '2025-08-18 15:00:00'),
+(25, 'PlayStation 5', 'Sony', 'piece', NULL, NULL, 'GAM-001', 8, 1, 'Next-gen gaming console', NULL, 1, '2025-08-18 15:00:00'),
+(26, 'Xbox Controller', 'Microsoft', 'piece', NULL, NULL, 'GAM-002', 8, 8, 'Wireless Xbox controller', NULL, 1, '2025-08-18 15:00:00'),
+(27, 'Gaming Mouse', 'SteelSeries', 'piece', NULL, NULL, 'GAM-003', 8, 12, 'High DPI gaming mouse', NULL, 1, '2025-08-18 15:00:00'),
+(28, 'CCTV Camera', 'Hikvision', 'piece', NULL, NULL, 'SEC-001', 9, 10, 'HD security camera', NULL, 1, '2025-08-18 15:00:00'),
+(29, 'Smart Lock', 'Yale', 'piece', NULL, NULL, 'SEC-002', 9, 5, 'WiFi enabled smart lock', NULL, 1, '2025-08-18 15:00:00'),
+(30, 'Motion Sensor', 'Ring', 'piece', NULL, NULL, 'SEC-003', 9, 15, 'Wireless motion detector', NULL, 1, '2025-08-18 15:00:00'),
+(31, 'LED Bulb 10W', 'Philips', 'piece', NULL, NULL, 'LIT-001', 10, 50, 'Energy efficient LED bulb', NULL, 1, '2025-08-18 15:00:00'),
+(32, 'Smart Switch', 'TP-Link', 'piece', NULL, NULL, 'LIT-002', 10, 20, 'WiFi controlled light switch', NULL, 1, '2025-08-18 15:00:00'),
+(33, 'LED Strip 5M', 'Govee', 'piece', NULL, NULL, 'LIT-003', 10, 25, 'RGB LED strip with remote', NULL, 1, '2025-08-18 15:00:00');
 
 -- --------------------------------------------------------
 
@@ -578,7 +620,6 @@ CREATE TABLE `return_percale` (
   `product_id` int(11) DEFAULT NULL,
   `fabric_name` varchar(255) NOT NULL,
   `fabric_type` varchar(100) DEFAULT NULL,
-  `color` varchar(50) DEFAULT NULL,
   `quantity` decimal(10,2) NOT NULL,
   `unit` varchar(20) DEFAULT 'meters',
   `original_price` decimal(15,2) NOT NULL,
@@ -598,9 +639,9 @@ CREATE TABLE `return_percale` (
 -- Dumping data for table `return_percale`
 --
 
-INSERT INTO `return_percale` (`id`, `return_no`, `return_type`, `customer_id`, `supplier_id`, `order_id`, `purchase_id`, `product_id`, `fabric_name`, `fabric_type`, `color`, `quantity`, `unit`, `original_price`, `return_price`, `return_reason`, `return_date`, `status`, `approved_by`, `approved_date`, `notes`, `created_by`, `created_at`, `updated_at`) VALUES
-(1, 'RET-001', 'customer_return', 4, NULL, NULL, NULL, NULL, 'Premium Cotton Percale', 'Cotton', 'White', 5.00, 'meters', 150.00, 120.00, 'Fabric quality not as expected', '2025-08-17', 'pending', NULL, NULL, 'Customer complaint about fabric texture', 1, '2025-08-17 22:32:48', '2025-08-17 23:03:27'),
-(2, 'RET-002', 'customer_return', 4, NULL, NULL, NULL, NULL, 'Silk Blend Percale', 'Silk', 'Blue', 3.50, 'meters', 200.00, 180.00, 'Color mismatch with order', '2025-08-17', 'rejected', 1, '2025-08-18', 'Supplier accepted return due to color variation', 1, '2025-08-17 22:32:48', '2025-08-17 23:04:14');
+INSERT INTO `return_percale` (`id`, `return_no`, `return_type`, `customer_id`, `supplier_id`, `order_id`, `purchase_id`, `product_id`, `fabric_name`, `fabric_type`, `quantity`, `unit`, `original_price`, `return_price`, `return_reason`, `return_date`, `status`, `approved_by`, `approved_date`, `notes`, `created_by`, `created_at`, `updated_at`) VALUES
+(1, 'RET-001', 'customer_return', 4, NULL, NULL, NULL, NULL, 'Premium Cotton Percale', 'Cotton', 5.00, 'meters', 150.00, 120.00, 'Fabric quality not as expected', '2025-08-17', 'pending', NULL, NULL, 'Customer complaint about fabric texture', 1, '2025-08-17 22:32:48', '2025-08-17 23:03:27'),
+(2, 'RET-002', 'customer_return', 4, NULL, NULL, NULL, NULL, 'Silk Blend Percale', 'Silk', 3.50, 'meters', 200.00, 180.00, 'Color mismatch with order', '2025-08-17', 'rejected', 1, '2025-08-18', 'Supplier accepted return due to color variation', 1, '2025-08-17 22:32:48', '2025-08-17 23:04:14');
 
 -- --------------------------------------------------------
 
@@ -635,6 +676,7 @@ CREATE TABLE `sale` (
   `id` int(11) NOT NULL,
   `customer_id` int(11) DEFAULT NULL,
   `walk_in_cust_name` varchar(255) NOT NULL DEFAULT '0',
+  `customer_cnic` varchar(15) DEFAULT NULL,
   `discount` decimal(15,2) NOT NULL DEFAULT 0.00,
   `after_discount` decimal(15,2) NOT NULL,
   `sale_date` date NOT NULL,
@@ -729,12 +771,12 @@ CREATE TABLE `settings` (
 --
 
 INSERT INTO `settings` (`id`, `setting_key`, `setting_value`, `setting_description`, `setting_type`, `setting_group`, `is_public`, `created_at`, `updated_at`) VALUES
-(85, 'company_name', 'WASEM WEARS', 'Company/Business Name', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
-(86, 'company_tagline', 'Professional Tailoring Services', 'Company Tagline or Description', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
-(87, 'company_phone', '+92 323 9507813', 'Company Phone Number', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
-(88, 'company_email', 'info@tailorshop.com', 'Company Email Address', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(85, 'company_name', 'ELECTRONICS STORE', 'Company/Business Name', 'text', 'general', 1, '2025-08-18 15:00:00', '2025-08-18 15:00:00'),
+(86, 'company_tagline', 'Your One-Stop Electronics Shop', 'Company Tagline or Description', 'text', 'general', 1, '2025-08-18 15:00:00', '2025-08-18 15:00:00'),
+(87, 'company_phone', '+92-300-1234567', 'Company Phone Number', 'text', 'general', 1, '2025-08-18 15:00:00', '2025-08-18 15:00:00'),
+(88, 'company_email', 'info@electronicsstore.pk', 'Company Email Address', 'text', 'general', 1, '2025-08-18 15:00:00', '2025-08-18 15:00:00'),
 (89, 'company_address', 'Address shop #1 hameed plaza main university road Pakistan', 'Company Address', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
-(90, 'company_website', 'www.tailorshop.com', 'Company Website', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
+(90, 'company_website', 'www.electronicsstore.pk', 'Company Website', 'text', 'general', 1, '2025-08-18 15:00:00', '2025-08-18 15:00:00'),
 (91, 'company_logo', '', 'Company Logo URL (optional)', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
 (92, 'currency_symbol', 'PKR', 'Currency Symbol', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
 (93, 'currency_name', 'Pakistani Rupee', 'Currency Name', 'text', 'general', 1, '2025-08-18 00:27:12', '2025-08-18 00:27:12'),
@@ -808,8 +850,11 @@ CREATE TABLE `supplier` (
 --
 
 INSERT INTO `supplier` (`id`, `supplier_name`, `supplier_contact`, `supplier_open_balance`, `supplier_address`, `supplier_email`, `status`, `created_at`, `opening_balance`) VALUES
-(2, 'Zubair Khan', '03341234567', 0.00, 'hayatabad\r\nDoctor Guest House', 'Zubair Khan', 1, '2025-08-14 10:34:58', 12.00),
-(3, 'Farman Khan', '+923342372772', 0.00, 'Doctor Guest House, Street 6, Phase 4, HMC, Hayatabad', 'z.r@gmail.com', 1, '2025-08-18 01:33:00', 0.00);
+(1, 'Tech Solutions Ltd', '0300-6666666', 0.00, 'Office #15, 5th Floor, Blue Area, Islamabad', 'info@techsolutions.pk', 1, '2025-08-18 15:00:00', 0.00),
+(2, 'Electronics Wholesale', '0300-7777777', 0.00, 'Warehouse #3, Industrial Area, Islamabad', 'sales@ewholesale.pk', 1, '2025-08-18 15:00:00', 0.00),
+(3, 'Digital Imports', '0300-8888888', 0.00, 'Shop #45, Electronics Market, Rawalpindi', 'contact@digitalimports.pk', 1, '2025-08-18 15:00:00', 0.00),
+(4, 'Smart Gadgets Co', '0300-9999999', 0.00, 'Showroom #12, Centaurus Mall, Islamabad', 'info@smartgadgets.pk', 1, '2025-08-18 15:00:00', 0.00),
+(5, 'Home Electronics', '0300-0000000', 0.00, 'Shop #78, Main Market, Islamabad', 'sales@homeelectronics.pk', 1, '2025-08-18 15:00:00', 0.00);
 
 -- --------------------------------------------------------
 
@@ -1469,6 +1514,12 @@ ALTER TABLE `order_items`
 --
 ALTER TABLE `supplier_payments`
   ADD CONSTRAINT `fk_supplier_payments_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `supplier` (`id`) ON DELETE CASCADE;
+
+--
+-- CNIC fields are already present in customer and sale tables
+-- No additional ALTER statements needed
+--
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

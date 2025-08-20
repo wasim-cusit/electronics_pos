@@ -18,8 +18,41 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-// Fetch all suppliers
-$suppliers = $pdo->query("SELECT * FROM supplier ORDER BY supplier_name")->fetchAll(PDO::FETCH_ASSOC);
+// Handle search functionality
+$search = $_GET['search'] ?? '';
+$balance_filter = $_GET['balance_filter'] ?? '';
+
+// Build the suppliers query with search filters
+$suppliers_query = "SELECT * FROM supplier WHERE 1=1";
+
+$params = [];
+
+if (!empty($search)) {
+    $suppliers_query .= " AND (supplier_name LIKE ? OR supplier_contact LIKE ? OR supplier_email LIKE ? OR supplier_address LIKE ?)";
+    $search_param = "%$search%";
+    $params = array_merge($params, [$search_param, $search_param, $search_param, $search_param]);
+}
+
+if ($balance_filter !== '') {
+    switch ($balance_filter) {
+        case 'owe':
+            $suppliers_query .= " AND opening_balance > 0";
+            break;
+        case 'owed':
+            $suppliers_query .= " AND opening_balance < 0";
+            break;
+        case 'zero':
+            $suppliers_query .= " AND (opening_balance = 0 OR opening_balance IS NULL)";
+            break;
+    }
+}
+
+$suppliers_query .= " ORDER BY supplier_name";
+
+// Execute the query with parameters
+$stmt = $pdo->prepare($suppliers_query);
+$stmt->execute($params);
+$suppliers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 
@@ -28,7 +61,7 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
 
             <?php if (isset($_GET['success'])): ?>
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -112,6 +145,77 @@ include 'includes/header.php';
                 </div>
             </div>
 
+            <!-- Search and Filter Section -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-search me-2"></i>Search & Filter Suppliers
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="search" class="form-label">Search Suppliers</label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="search" name="search" 
+                                       placeholder="Search by name, contact, email, or address..." 
+                                       value="<?= htmlspecialchars($search) ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="balance_filter" class="form-label">Filter by Balance</label>
+                            <select class="form-select" id="balance_filter" name="balance_filter">
+                                <option value="">All Balances</option>
+                                <option value="owe" <?= ($balance_filter === 'owe') ? 'selected' : '' ?>>You Owe (Positive Balance)</option>
+                                <option value="owed" <?= ($balance_filter === 'owed') ? 'selected' : '' ?>>You're Owed (Negative Balance)</option>
+                                <option value="zero" <?= ($balance_filter === 'zero') ? 'selected' : '' ?>>No Balance (Zero)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-search me-2"></i>Search
+                                </button>
+                                <a href="suppliers.php" class="btn btn-secondary">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Clear
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Search Results Summary -->
+                    <?php if (!empty($search) || $balance_filter !== ''): ?>
+                        <div class="mt-3 p-3 bg-info bg-opacity-10 border border-info rounded">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-info-circle text-info me-2"></i>
+                                <div>
+                                    <strong>Search Results:</strong>
+                                    <?php if (!empty($search)): ?>
+                                        <span class="badge bg-primary ms-2">Search: "<?= htmlspecialchars($search) ?>"</span>
+                                    <?php endif; ?>
+                                    <?php if ($balance_filter !== ''): ?>
+                                        <span class="badge bg-success ms-2">
+                                            Balance Filter: 
+                                            <?php 
+                                            switch($balance_filter) {
+                                                case 'owe': echo 'You Owe'; break;
+                                                case 'owed': echo 'You\'re Owed'; break;
+                                                case 'zero': echo 'No Balance'; break;
+                                            }
+                                            ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <span class="badge bg-secondary ms-2">Found: <?= count($suppliers) ?> suppliers</span>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <!-- Supplier List Table -->
             <div class="card">
                 <div class="card-header bg-light">
@@ -187,6 +291,9 @@ include 'includes/header.php';
             </div>
             <div class="modal-body">
                 <form id="addSupplierForm">
+                    <!-- CSRF Protection -->
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+                    
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="supplierName" class="form-label">Supplier Name *</label>
@@ -302,5 +409,102 @@ function saveSupplier() {
     });
 }
 </script>
+
+<style>
+/* Search and filter section styling */
+.card-header.bg-light {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.search-results-summary {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    border: 1px solid #bee5eb;
+    border-radius: 8px;
+}
+
+/* Enhanced form controls */
+.form-control:focus, .form-select:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #6c757d;
+}
+
+/* Enhanced table styling */
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.card {
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    border-radius: 8px 8px 0 0 !important;
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* Enhanced button styles */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+/* Badge styling */
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+/* Enhanced modal styling */
+.modal-content {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    border-radius: 12px 12px 0 0;
+    border-bottom: none;
+}
+
+.modal-footer {
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .col-md-4 {
+        margin-bottom: 1rem;
+    }
+    
+    .d-flex.gap-2 {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .d-flex.gap-2 .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+}
+</style>
 
 <?php include 'includes/footer.php'; ?>

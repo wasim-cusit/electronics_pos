@@ -72,7 +72,7 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4" style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0"><i class="bi bi-list-ul text-primary"></i> Supplier Payment List</h2>
                 <div class="d-flex">
@@ -99,39 +99,91 @@ include 'includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <!-- Search and Filter Form -->
-            <div class="card mb-4">
+            <!-- Search and Filter Section -->
+            <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-light">
-                    <h6 class="mb-0"><i class="bi bi-search"></i> Search & Filter</h6>
+                    <h6 class="mb-0">
+                        <i class="bi bi-search me-2"></i>Search & Filter Supplier Payments
+                    </h6>
                 </div>
                 <div class="card-body">
-                    <form method="get" class="row g-3">
+                    <form method="GET" class="row g-3">
                         <div class="col-md-3">
-                            <input type="text" name="search" class="form-control" placeholder="Search reference, notes, supplier..." value="<?= htmlspecialchars($search) ?>">
+                            <label for="search" class="form-label">Search Payments</label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="search" name="search" 
+                                       placeholder="Search by reference, notes, supplier..." 
+                                       value="<?= htmlspecialchars($search) ?>">
+                            </div>
                         </div>
-                        <div class="col-md-2">
-                            <select name="supplier_filter" class="form-control">
+                        <div class="col-md-3">
+                            <label for="supplier_filter" class="form-label">Filter by Supplier</label>
+                            <select class="form-select" id="supplier_filter" name="supplier_filter">
                                 <option value="">All Suppliers</option>
                                 <?php foreach ($suppliers as $supplier): ?>
-                                    <option value="<?= $supplier['id'] ?>" <?= $supplier_filter == $supplier['id'] ? 'selected' : '' ?>><?= htmlspecialchars($supplier['supplier_name']) ?></option>
+                                    <option value="<?= $supplier['id'] ?>" <?= $supplier_filter == $supplier['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($supplier['supplier_name']) ?>
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <input type="date" name="date_from" class="form-control" placeholder="From Date" value="<?= htmlspecialchars($date_from) ?>">
+                            <label for="date_from" class="form-label">From Date</label>
+                            <input type="date" class="form-control" id="date_from" name="date_from" 
+                                   value="<?= htmlspecialchars($date_from) ?>">
                         </div>
                         <div class="col-md-2">
-                            <input type="date" name="date_to" class="form-control" placeholder="To Date" value="<?= htmlspecialchars($date_to) ?>">
+                            <label for="date_to" class="form-label">To Date</label>
+                            <input type="date" class="form-control" id="date_to" name="date_to" 
+                                   value="<?= htmlspecialchars($date_to) ?>">
                         </div>
-                        <div class="col-md-3">
-                            <button type="submit" class="btn btn-primary me-2">
-                                <i class="bi bi-search"></i> Search
-                            </button>
-                            <a href="supplier_payment_list.php" class="btn btn-secondary">
-                                <i class="bi bi-arrow-clockwise"></i> Reset
-                            </a>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <div class="d-flex gap-2 w-100">
+                                <button type="submit" class="btn btn-primary flex-fill">
+                                    <i class="bi bi-search me-2"></i>Search
+                                </button>
+                                <a href="supplier_payment_list.php" class="btn btn-secondary flex-fill">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Clear
+                                </a>
+                            </div>
                         </div>
                     </form>
+                    
+                    <!-- Search Results Summary -->
+                    <?php if (!empty($search) || !empty($supplier_filter) || !empty($date_from) || !empty($date_to)): ?>
+                        <div class="mt-3 p-3 bg-info bg-opacity-10 border border-info rounded">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-info-circle text-info me-2"></i>
+                                <div>
+                                    <strong>Search Results:</strong>
+                                    <?php if (!empty($search)): ?>
+                                        <span class="badge bg-primary ms-2">Search: "<?= htmlspecialchars($search) ?>"</span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($supplier_filter)): ?>
+                                        <?php 
+                                        $selected_supplier = array_filter($suppliers, function($s) use ($supplier_filter) { 
+                                            return $s['id'] == $supplier_filter; 
+                                        });
+                                        $supplier_name = !empty($selected_supplier) ? reset($selected_supplier)['supplier_name'] : 'Unknown';
+                                        ?>
+                                        <span class="badge bg-success ms-2">Supplier: <?= htmlspecialchars($supplier_name) ?></span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($date_from) || !empty($date_to)): ?>
+                                        <span class="badge bg-warning ms-2">
+                                            Date Range: 
+                                            <?= !empty($date_from) ? date('M d, Y', strtotime($date_from)) : 'Any' ?> 
+                                            to 
+                                            <?= !empty($date_to) ? date('M d, Y', strtotime($date_to)) : 'Any' ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <span class="badge bg-secondary ms-2">Found: <?= count($payments) ?> payments</span>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -231,5 +283,96 @@ include 'includes/header.php';
         </main>
     </div>
 </div>
+
+<style>
+/* Search and filter section styling */
+.card-header.bg-light {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.search-results-summary {
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+    border: 1px solid #bee5eb;
+    border-radius: 8px;
+}
+
+/* Enhanced form controls */
+.form-control:focus, .form-select:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border-color: #ced4da;
+    color: #6c757d;
+}
+
+/* Enhanced table styling */
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.card {
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    border-radius: 8px 8px 0 0 !important;
+    border-bottom: 1px solid #e9ecef;
+}
+
+/* Enhanced button styles */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+/* Badge styling */
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+/* Summary cards enhancement */
+.card.bg-light {
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.card.bg-light:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .col-md-2, .col-md-3 {
+        margin-bottom: 1rem;
+    }
+    
+    .d-flex.gap-2 {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .d-flex.gap-2 .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+}
+</style>
 
 <?php include 'includes/footer.php'; ?>

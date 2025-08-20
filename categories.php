@@ -7,43 +7,82 @@ $activePage = 'categories';
 
 // Handle Add Category
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_category'])) {
-    $name = trim($_POST['name']);
-    $description = trim($_POST['description'] ?? '');
-    
-    // Check if category name already exists
-    $stmt = $pdo->prepare("SELECT id FROM categories WHERE category = ?");
-    $stmt->execute([$name]);
-    if ($stmt->fetch()) {
-        $error = "Category name already exists!";
-    } else {
-        $stmt = $pdo->prepare("INSERT INTO categories (category, description) VALUES (?, ?)");
-        $stmt->execute([$name, $description]);
-        header("Location: categories.php?success=added");
+    // CSRF Protection
+    if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+        $error = "Invalid request. Please try again.";
+        header("Location: categories.php?error=" . urlencode($error));
         exit;
+    }
+    
+    $name = sanitize_input(trim($_POST['name']));
+    $description = sanitize_input(trim($_POST['description'] ?? ''));
+    
+    // Validate input
+    if (empty($name)) {
+        $error = "Category name is required!";
+    } else {
+        // Check if category name already exists
+        $stmt = $pdo->prepare("SELECT id FROM categories WHERE category = ?");
+        $stmt->execute([$name]);
+        if ($stmt->fetch()) {
+            $error = "Category name already exists!";
+        } else {
+            try {
+                $stmt = $pdo->prepare("INSERT INTO categories (category, description) VALUES (?, ?)");
+                $stmt->execute([$name, $description]);
+                header("Location: categories.php?success=added");
+                exit;
+            } catch (Exception $e) {
+                $error = "Error adding category: " . $e->getMessage();
+            }
+        }
     }
 }
 
 // Handle Edit Category
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_category'])) {
-    $id = $_POST['id'];
-    $name = trim($_POST['name']);
-    $description = trim($_POST['description'] ?? '');
-    
-    // Check if category name already exists (excluding current category)
-    $stmt = $pdo->prepare("SELECT id FROM categories WHERE category = ? AND id != ?");
-    $stmt->execute([$name, $id]);
-    if ($stmt->fetch()) {
-        $error = "Category name already exists!";
-    } else {
-        $stmt = $pdo->prepare("UPDATE categories SET category = ?, description = ? WHERE id = ?");
-        $stmt->execute([$name, $description, $id]);
-        header("Location: categories.php?success=updated");
+    // CSRF Protection
+    if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+        $error = "Invalid request. Please try again.";
+        header("Location: categories.php?error=" . urlencode($error));
         exit;
+    }
+    
+    $id = intval($_POST['id']);
+    $name = sanitize_input(trim($_POST['name']));
+    $description = sanitize_input(trim($_POST['description'] ?? ''));
+    
+    // Validate input
+    if (empty($name)) {
+        $error = "Category name is required!";
+    } else {
+        // Check if category name already exists (excluding current category)
+        $stmt = $pdo->prepare("SELECT id FROM categories WHERE category = ? AND id != ?");
+        $stmt->execute([$name, $id]);
+        if ($stmt->fetch()) {
+            $error = "Category name already exists!";
+        } else {
+            try {
+                $stmt = $pdo->prepare("UPDATE categories SET category = ?, description = ? WHERE id = ?");
+                $stmt->execute([$name, $description, $id]);
+                header("Location: categories.php?success=updated");
+                exit;
+            } catch (Exception $e) {
+                $error = "Error updating category: " . $e->getMessage();
+            }
+        }
     }
 }
 
 // Handle Delete Category
 if (isset($_GET['delete'])) {
+    // CSRF Protection for GET requests (using referrer check)
+    if (!isset($_SERVER['HTTP_REFERER']) || strpos($_SERVER['HTTP_REFERER'], $_SERVER['HTTP_HOST']) === false) {
+        $error = "Invalid request. Please try again.";
+        header("Location: categories.php?error=" . urlencode($error));
+        exit;
+    }
+    
     $id = intval($_GET['delete']);
     
     // Check if category is being used by any products
@@ -54,10 +93,14 @@ if (isset($_GET['delete'])) {
     if ($product_count > 0) {
         $error = "Cannot delete category. It is being used by $product_count product(s).";
     } else {
-        $stmt = $pdo->prepare("DELETE FROM categories WHERE id = ?");
-        $stmt->execute([$id]);
-        header("Location: categories.php?success=deleted");
-        exit;
+        try {
+            $stmt = $pdo->prepare("DELETE FROM categories WHERE id = ?");
+            $stmt->execute([$id]);
+            header("Location: categories.php?success=deleted");
+            exit;
+        } catch (Exception $e) {
+            $error = "Error deleting category: " . $e->getMessage();
+        }
     }
 }
 
@@ -84,7 +127,7 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <h2 class="mb-4">📂 Product Categories</h2>
              <!-- Quick Stats -->
              <div class="row mt-4">
@@ -146,6 +189,9 @@ include 'includes/header.php';
                 </div>
                 <div class="card-body">
                     <form method="post">
+                        <!-- CSRF Protection -->
+                        <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+                        
                         <?php if ($edit_category): ?>
                             <input type="hidden" name="id" value="<?= $edit_category['id'] ?>">
                         <?php endif; ?>
@@ -154,7 +200,7 @@ include 'includes/header.php';
                                 <label class="form-label">Category Name</label>
                                 <input type="text" name="name" class="form-control" required 
                                        value="<?= htmlspecialchars($edit_category['category'] ?? '') ?>"
-                                       placeholder="e.g., Cotton Fabric, Silk, Denim">
+                                       placeholder="e.g., Smartphones, Laptops, Accessories">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Description (Optional)</label>

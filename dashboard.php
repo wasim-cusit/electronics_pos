@@ -96,16 +96,13 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style=" padding-top: 20px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="mb-0">
-                    <i class="bi bi-speedometer2 text-primary me-2"></i>
+                <h1 class="h2">
+                    <i class="bi bi-speedometer2 text-warning me-2"></i>
                     Dashboard
-                </h2>
-                <div class="text-muted">
-                    <i class="bi bi-calendar3 me-1"></i>
-                    <?= date('l, F j, Y') ?>
-                </div>
+                </h1>
+                
             </div>
 
             <!-- Stats Cards Row 1 -->
@@ -367,6 +364,12 @@ include 'includes/header.php';
                                 </a>
                                 <a href="daily_books.php" class="btn btn-info">
                                     <i class="bi bi-journal-text me-2"></i>Daily Books
+                                </a>
+                                <a href="company_settings.php" class="btn btn-outline-primary">
+                                    <i class="bi bi-building me-2"></i>Company Settings
+                                </a>
+                                <a href="users.php" class="btn btn-outline-success">
+                                    <i class="bi bi-people-fill me-2"></i>User Management
                                 </a>
                             </div>
                         </div>

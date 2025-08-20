@@ -86,6 +86,10 @@ if (is_logged_in()) {
           <i class="bi bi-tags me-2"></i>Categories
         </a>
       </li>
+      
+
+
+     
 
 
 
@@ -170,6 +174,7 @@ if (is_logged_in()) {
           <i class="bi bi-receipt me-2"></i>Expenses
         </a>
       </li>
+      <!-- Orders Section - Commented out for Electronics POS
       <li class="nav-item mb-2">
         <a class="nav-link<?= $activePage === 'order' || $activePage === 'add_order' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#ordersSubmenu" aria-expanded="<?= $activePage === 'order' || $activePage === 'add_order' ? 'true' : 'false' ?>" aria-controls="ordersSubmenu">
           <i class="bi bi-clipboard-data me-2"></i>Orders
@@ -190,6 +195,7 @@ if (is_logged_in()) {
           </ul>
         </div>
       </li>
+      -->
       
       <li class="nav-item mb-2">
         <a class="nav-link<?= $activePage === 'return_percale' ? ' active' : '' ?>" href="<?= $base_url ?>return_percale.php">
@@ -197,6 +203,7 @@ if (is_logged_in()) {
         </a>
       </li>
       
+      <!-- Unit Prices Section - Commented out for Electronics POS
       <li class="nav-item mb-2">
         <a class="nav-link<?= $activePage === 'unit' || $activePage === 'add_unit' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#unitsSubmenu" aria-expanded="<?= $activePage === 'unit' || $activePage === 'add_unit' ? 'true' : 'false' ?>" aria-controls="unitsSubmenu">
           <i class="bi bi-rulers me-2"></i>Unit Prices
@@ -217,6 +224,7 @@ if (is_logged_in()) {
           </ul>
         </div>
       </li>
+      -->
       
    
     </ul>
@@ -231,33 +239,77 @@ if (is_logged_in()) {
           <?php endif; ?>
         </a>
       </li>
+     
       <li class="nav-item mb-2">
         <a class="nav-link<?= $activePage === 'daily_books' ? ' active' : '' ?>" href="<?= $base_url ?>daily_books.php">
           <i class="bi bi-journal-text me-2"></i>Daily Books
         </a>
       </li>
       <li class="nav-item mb-2">
-        <a class="nav-link<?= $activePage === 'reports' ? ' active' : '' ?>" href="<?= $base_url ?>reports.php">
+        <a class="nav-link<?= $activePage === 'reports' || $activePage === 'comprehensive_purchase_reports' || $activePage === 'comprehensive_sale_reports' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#reportsSubmenu" aria-expanded="<?= $activePage === 'reports' || $activePage === 'comprehensive_purchase_reports' || $activePage === 'comprehensive_sale_reports' ? 'true' : 'false' ?>" aria-controls="reportsSubmenu">
           <i class="bi bi-graph-up-arrow me-2"></i>Reports
+          <i class="bi bi-chevron-right ms-auto"></i>
+        </a>
+        <div class="collapse<?= $activePage === 'reports' || $activePage === 'comprehensive_purchase_reports' || $activePage === 'comprehensive_sale_reports' ? ' show' : '' ?>" id="reportsSubmenu">
+          <ul class="nav flex-column ms-3">
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'reports' ? ' active' : '' ?>" href="<?= $base_url ?>reports.php">
+                <i class="bi bi-bar-chart me-2"></i>General Reports
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'comprehensive_purchase_reports' ? ' active' : '' ?>" href="<?= $base_url ?>comprehensive_purchase_reports.php">
+                <i class="bi bi-cart-plus me-2"></i>Comprehensive Purchase Reports
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'comprehensive_sale_reports' ? ' active' : '' ?>" href="<?= $base_url ?>comprehensive_sale_reports.php">
+                <i class="bi bi-cash-coin me-2"></i>Comprehensive Sale Reports
+              </a>
+            </li>
+          </ul>
+        </div>
+      </li>
+      <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'profile' ? ' active' : '' ?>" href="<?= $base_url ?>profile.php">
+          <i class="bi bi-person-circle me-2"></i>Profile
         </a>
       </li>
+      
+      <!-- User Management Section -->
+      <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'users' ? ' active' : '' ?>" href="<?= $base_url ?>user_management.php">
+          <i class="bi bi-people-fill me-2"></i>User Management
+        </a>
+      </li>
+      
+      <!-- Settings Section -->
+      <li class="nav-item mb-2">
+        <a class="nav-link<?= $activePage === 'company_settings' || $activePage === 'settings' ? ' active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#settingsSubmenu" aria-expanded="<?= $activePage === 'company_settings' || $activePage === 'settings' ? 'true' : 'false' ?>" aria-controls="settingsSubmenu">
+          <i class="bi bi-gear me-2"></i>Settings
+          <i class="bi bi-chevron-right ms-auto"></i>
+        </a>
+        <div class="collapse<?= $activePage === 'company_settings' || $activePage === 'settings' ? ' show' : '' ?>" id="settingsSubmenu">
+          <ul class="nav flex-column ms-3">
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'company_settings' ? ' active' : '' ?>" href="<?= $base_url ?>company_settings.php">
+                <i class="bi bi-building me-2"></i>Company Settings
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link<?= $activePage === 'settings' ? ' active' : '' ?>" href="<?= $base_url ?>settings.php">
+                <i class="bi bi-sliders me-2"></i>System Settings
+              </a>
+            </li>
+          </ul>
+        </div>
+      </li>
+      
       <li class="nav-item mb-2">
         <a class="nav-link<?= $activePage === 'backup' ? ' active' : '' ?>" href="<?= $base_url ?>backup.php">
           <i class="bi bi-cloud-arrow-up me-2"></i>System Backup
         </a>
       </li>
-      <?php if (function_exists('has_role') && has_role('Admin')): ?>
-        <li class="nav-item mb-2">
-          <a class="nav-link<?= $activePage === 'users' ? ' active' : '' ?>" href="<?= $base_url ?>users.php">
-            <i class="bi bi-person-gear me-2"></i>User Management
-          </a>
-        </li>
-        <li class="nav-item mb-2">
-          <a class="nav-link<?= $activePage === 'settings' ? ' active' : '' ?>" href="<?= $base_url ?>settings.php">
-            <i class="bi bi-gear me-2"></i>Settings
-          </a>
-        </li>
-      <?php endif; ?>
       <li class="nav-item mt-3">
         <a class="nav-link text-danger<?= $activePage === 'logout' ? ' active' : '' ?>" href="<?= $base_url ?>logout.php">
           <i class="bi bi-box-arrow-right me-2"></i>Logout

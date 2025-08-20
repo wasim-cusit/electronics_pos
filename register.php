@@ -30,7 +30,7 @@ include 'includes/header.php';
 <div class="container-fluid">
   <div class="row">
     <?php include 'includes/sidebar.php'; ?>
-    <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+    <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
       <h2 class="mb-4">Register New User</h2>
       <?= get_flash() ?>
       <form method="post" class="card p-4 shadow-sm" style="max-width:400px;">

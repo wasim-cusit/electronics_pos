@@ -65,13 +65,10 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>  
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4" style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2><i class="bi bi-bell me-2"></i>Notifications</h2>
                 <div>
-                    <a href="test_notifications.php" class="btn btn-warning me-2">
-                        <i class="bi bi-bug me-1"></i>Test Notifications
-                    </a>
                     <a href="?mark_all_read" class="btn btn-success me-2" onclick="return confirm('Mark all notifications as read?')">
                         <i class="bi bi-check-all me-1"></i>Mark All as Read
                     </a>

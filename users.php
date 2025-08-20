@@ -26,7 +26,7 @@ include 'includes/header.php';
             <i class="bi bi-people-fill text-primary me-2"></i>
             User Management
         </h2>
-        <a href="register.php" class="btn btn-primary">
+        <a href="add_user.php" class="btn btn-primary">
             <i class="bi bi-person-plus me-2"></i>Add New User
         </a>
     </div>

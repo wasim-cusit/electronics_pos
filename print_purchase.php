@@ -273,7 +273,7 @@ function safe_get_setting($key, $default = '') {
                 <th width="5%">#</th>
                 <th width="20%">Product Name</th>
                 <th width="15%">Category</th>
-                <th width="10%">Color</th>
+                
                 <th width="8%">Unit</th>
                 <th width="10%">Quantity</th>
                 <th width="12%">Unit Price</th>
@@ -292,17 +292,8 @@ function safe_get_setting($key, $default = '') {
                 <tr>
                     <td><?= $counter++ ?></td>
                     <td><strong><?= htmlspecialchars($item['product_name'] ?? 'N/A') ?></strong></td>
-                    <td><span class="badge" style="background-color: #17a2b8; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px;"><?= htmlspecialchars($item['category_name'] ?? 'N/A') ?></span></td>
-                    <td>
-                        <?php if (!empty($item['color'])): ?>
-                            <span style="background-color: #e9ecef; border: 1px solid #ced4da; padding: 3px 8px; border-radius: 15px; font-size: 11px; color: #495057; font-weight: 500;">
-                                <?= htmlspecialchars($item['color']) ?>
-                            </span>
-                        <?php else: ?>
-                            <span style="color: #6c757d; font-size: 11px; font-style: italic;">No color specified</span>
-                        <?php endif; ?>
-                    </td>
-                    <td><code style="background-color: #f8f9fa; padding: 2px 6px; border-radius: 4px; font-size: 11px;"><?= htmlspecialchars($item['product_unit'] ?? 'N/A') ?></code></td>
+                                            <td><span class="badge" style="background-color: #17a2b8; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px;"><?= htmlspecialchars($item['category_name'] ?? 'N/A') ?></span></td>
+                        <td><code style="background-color: #f8f9fa; padding: 2px 6px; border-radius: 4px; font-size: 11px;"><?= htmlspecialchars($item['product_unit'] ?? 'N/A') ?></code></td>
                     <td><span style="background-color: #007bff; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold;"><?= number_format($item['quantity'] ?? 0, 2) ?></span></td>
                     <td><?= safe_format_currency($item['purchase_price'] ?? 0) ?></td>
                     <td class="total-column"><?= safe_format_currency($item['purchase_total'] ?? 0) ?></td>

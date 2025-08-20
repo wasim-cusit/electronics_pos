@@ -5,47 +5,6 @@ require_once 'includes/config.php';
 
 $activePage = 'purchases';
 
-// Test function to validate phone number formatting
-function testPhoneNumberFormat($phoneNumber) {
-    $phone = preg_replace('/[^0-9]/', '', $phoneNumber);
-    error_log("Testing phone: $phoneNumber -> Cleaned: $phone");
-    
-    $formatted = '';
-    
-    if (strlen($phone) == 10) {
-        $formatted = '92' . $phone;
-        error_log("10 digits: added 92 prefix -> $formatted");
-    } elseif (strlen($phone) == 11) {
-        if (substr($phone, 0, 1) == '0') {
-            $formatted = '92' . substr($phone, 1);
-            error_log("11 digits starting with 0: removed 0 and added 92 -> $formatted");
-        } else {
-            $formatted = '92' . $phone;
-            error_log("11 digits starting with 3-9: added 92 prefix -> $formatted");
-        }
-    } elseif (strlen($phone) == 12 && substr($phone, 0, 2) == '92') {
-        $formatted = $phone;
-        error_log("12 digits starting with 92: used as is -> $formatted");
-    } elseif (strlen($phone) == 13 && substr($phone, 0, 3) == '920') {
-        $formatted = '92' . substr($phone, 3);
-        error_log("13 digits starting with 920: removed extra 0 -> $formatted");
-    } elseif (strlen($phone) == 13 && substr($phone, 0, 2) == '92') {
-        $formatted = $phone;
-        error_log("13 digits starting with 92: used as is -> $formatted");
-    } else {
-        if (substr($phone, 0, 1) == '0') {
-            $formatted = '92' . substr($phone, 1);
-            error_log("Other format starting with 0: removed 0 and added 92 -> $formatted");
-        } elseif (strlen($phone) >= 10) {
-            $formatted = '92' . substr($phone, -10);
-            error_log("Other format >= 10 digits: took last 10 and added 92 -> $formatted");
-        }
-    }
-    
-    error_log("Final formatted: $formatted (Length: " . strlen($formatted) . ")");
-    return $formatted;
-}
-
 // Generate WhatsApp message for purchase
 function generatePurchaseWhatsAppMessage($purchase, $pdo) {
     try {
@@ -195,8 +154,55 @@ if (isset($_GET['delete'])) {
 
 
 
-// Fetch all purchases
-$purchases = $pdo->query("SELECT p.*, s.supplier_name, s.supplier_contact, u.username AS created_by_name FROM purchase p LEFT JOIN supplier s ON p.supplier_id = s.id LEFT JOIN system_users u ON p.created_by = u.id ORDER BY p.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+// Handle search functionality with validation
+$search = sanitize_input($_GET['search'] ?? '');
+$supplier_filter = sanitize_input($_GET['supplier_filter'] ?? '');
+
+// Validate supplier filter
+if (!empty($supplier_filter) && !is_numeric($supplier_filter)) {
+    $supplier_filter = '';
+}
+
+// Build the purchases query with search filters
+$purchases_query = "SELECT p.*, s.supplier_name, s.supplier_contact, u.username AS created_by_name 
+                    FROM purchase p 
+                    LEFT JOIN supplier s ON p.supplier_id = s.id 
+                    LEFT JOIN system_users u ON p.created_by = u.id 
+                    WHERE 1=1";
+
+$params = [];
+
+if (!empty($search)) {
+    // Limit search length to prevent abuse
+    if (strlen($search) > 100) {
+        $search = substr($search, 0, 100);
+    }
+    
+    $purchases_query .= " AND (p.purchase_no LIKE ? OR s.supplier_name LIKE ? OR s.supplier_contact LIKE ?)";
+    $search_param = "%$search%";
+    $params = array_merge($params, [$search_param, $search_param, $search_param]);
+}
+
+if (!empty($supplier_filter)) {
+    $purchases_query .= " AND s.id = ?";
+    $params[] = intval($supplier_filter);
+}
+
+$purchases_query .= " ORDER BY p.id DESC";
+
+// Execute the query with parameters
+try {
+    $stmt = $pdo->prepare($purchases_query);
+    $stmt->execute($params);
+    $purchases = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    error_log("Purchases search error: " . $e->getMessage());
+    $purchases = [];
+    $error = "Error performing search. Please try again.";
+}
+
+// Fetch suppliers for dropdown filter
+$suppliers = $pdo->query("SELECT * FROM supplier ORDER BY supplier_name")->fetchAll(PDO::FETCH_ASSOC);
 
 include 'includes/header.php'; ?>
 <style>
@@ -287,6 +293,30 @@ include 'includes/header.php'; ?>
         font-weight: 600;
     }
     
+    /* Search and filter section styling */
+    .card-header.bg-light {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .search-results-summary {
+        background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+        border: 1px solid #bee5eb;
+        border-radius: 8px;
+    }
+    
+    /* Enhanced form controls */
+    .form-control:focus, .form-select:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    }
+    
+    .input-group-text {
+        background-color: #f8f9fa;
+        border-color: #ced4da;
+        color: #6c757d;
+    }
+    
     /* Validation styling */
     .is-invalid {
         border-color: #dc3545 !important;
@@ -356,172 +386,8 @@ function sendPurchaseWhatsAppMessage() {
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            alert('Error: Could not load purchase data');
+            // Handle error silently
         });
-}
-
-// Debug function to check phone number formatting
-function debugPhoneNumber(phone) {
-    console.log('Original phone:', phone);
-    let formatted = phone.replace(/\D/g, '');
-    console.log('After removing non-digits:', formatted);
-    
-    if (formatted.startsWith('0')) {
-        formatted = formatted.substring(1);
-        console.log('After removing leading 0:', formatted);
-    }
-    
-    if (formatted.length === 10) {
-        formatted = '92' + formatted;
-        console.log('After adding 92 prefix:', formatted);
-    }
-    
-    console.log('Final formatted phone:', formatted);
-    return formatted;
-}
-
-// Debug function to test WhatsApp message generation
-function debugWhatsAppMessage(purchaseId) {
-    console.log('Testing WhatsApp message generation for purchase:', purchaseId);
-    
-    fetch(`get_purchase_data.php?id=${purchaseId}`)
-        .then(response => response.json())
-        .then(data => {
-            console.log('Purchase data received:', data);
-            if (data.success) {
-                const message = generatePurchaseWhatsAppMessageFromData(data.purchase);
-                console.log('Generated message:', message);
-                console.log('Message length:', message.length);
-                console.log('URL encoded message:', encodeURIComponent(message));
-            } else {
-                console.error('Failed to get purchase data:', data);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching purchase data:', error);
-        });
-}
-
-// Debug function to test phone number formatting
-function debugPhoneFormatting(phoneNumber) {
-    console.log('Testing phone number formatting for:', phoneNumber);
-    
-    // Simulate the PHP logic
-    let phone = phoneNumber.replace(/\D/g, '');
-    console.log('After removing non-digits:', phone);
-    
-    let formattedPhone = '';
-    
-    if (phone.length == 10) {
-        formattedPhone = '92' + phone;
-        console.log('10 digits: added 92 prefix ->', formattedPhone);
-    } else if (phone.length == 11) {
-        if (phone.startsWith('0')) {
-            formattedPhone = '92' + phone.substring(1);
-            console.log('11 digits starting with 0: removed 0 and added 92 ->', formattedPhone);
-        } else {
-            formattedPhone = '92' + phone;
-            console.log('11 digits starting with 3-9: added 92 prefix ->', formattedPhone);
-        }
-    } else if (phone.length == 12 && phone.startsWith('92')) {
-        formattedPhone = phone;
-        console.log('12 digits starting with 92: used as is ->', formattedPhone);
-    } else if (phone.length == 13 && phone.startsWith('920')) {
-        formattedPhone = '92' + phone.substring(3);
-        console.log('13 digits starting with 920: removed extra 0 ->', formattedPhone);
-    } else if (phone.length == 13 && phone.startsWith('92')) {
-        formattedPhone = phone;
-        console.log('13 digits starting with 92: used as is ->', formattedPhone);
-    } else {
-        if (phone.startsWith('0')) {
-            formattedPhone = '92' + phone.substring(1);
-            console.log('Other format starting with 0: removed 0 and added 92 ->', formattedPhone);
-        } else if (phone.length >= 10) {
-            formattedPhone = '92' + phone.substring(-10);
-            console.log('Other format >= 10 digits: took last 10 and added 92 ->', formattedPhone);
-        }
-    }
-    
-    console.log('Final formatted phone:', formattedPhone);
-    console.log('Length:', formattedPhone.length);
-    console.log('Starts with 92:', formattedPhone.startsWith('92'));
-    
-    // Test WhatsApp URL
-    const testMessage = "Test message";
-    const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(testMessage)}`;
-    console.log('WhatsApp URL:', whatsappUrl);
-    
-    return formattedPhone;
-}
-
-// Test function for phone formatting
-function testPhoneFormatting() {
-    const testNumbers = [
-        '03001234567',
-        '3001234567',
-        '923001234567',
-        '9203001234567',
-        '+92-300-123-4567',
-        '300-123-4567'
-    ];
-    
-    console.log('=== Testing Phone Number Formatting ===');
-    testNumbers.forEach(number => {
-        console.log(`\n--- Testing: ${number} ---`);
-        debugPhoneFormatting(number);
-    });
-}
-
-// Test function for WhatsApp URL generation
-function testWhatsAppURL() {
-    console.log('=== Testing WhatsApp URL Generation ===');
-    
-    // Test with a sample purchase
-    const testPurchase = {
-        purchase_no: 'TEST001',
-        supplier_name: 'Test Supplier',
-        purchase_date: '15 Aug 2025',
-        total_amount: 144.00,
-        paid_amount: 0.00,
-        due_amount: 144.00,
-        items: [
-            {
-                product_name: 'Royal Tag',
-                category: 'Shirts',
-                quantity: 12,
-                purchase_price: 12.00,
-                total_price: 144.00
-            }
-        ]
-    };
-    
-    try {
-        const message = generatePurchaseWhatsAppMessageFromData(testPurchase);
-        console.log('Generated message:', message);
-        console.log('Message length:', message.length);
-        
-        // Test with different phone number formats
-        const testPhones = ['923001234567', '9230012345678'];
-        
-        testPhones.forEach(phone => {
-            const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-            console.log(`\nPhone: ${phone}`);
-            console.log('WhatsApp URL:', whatsappUrl);
-            console.log('URL length:', whatsappUrl.length);
-            
-            // Test if the URL is valid
-            try {
-                new URL(whatsappUrl);
-                console.log('✅ Valid URL');
-            } catch (e) {
-                console.log('❌ Invalid URL:', e.message);
-            }
-        });
-        
-    } catch (error) {
-        console.error('Error testing WhatsApp URL:', error);
-    }
 }
 
 // Function to generate WhatsApp message from purchase data
@@ -578,35 +444,6 @@ function generatePurchaseWhatsAppMessageFromData(purchase) {
 
 // Phone number input validation
 document.addEventListener('DOMContentLoaded', function() {
-    // Test WhatsApp message generation on page load
-    console.log('Page loaded, testing WhatsApp message generation...');
-    
-    // Test with a sample purchase object
-    const testPurchase = {
-        purchase_no: 'TEST001',
-        supplier_name: 'Test Supplier',
-        purchase_date: '2025-01-01',
-        total_amount: 1000.00,
-        paid_amount: 800.00,
-        due_amount: 200.00,
-        items: [
-            {
-                product_name: 'Test Product',
-                category: 'Test Category',
-                quantity: 5,
-                purchase_price: 200.00,
-                total_price: 1000.00
-            }
-        ]
-    };
-    
-    try {
-        const testMessage = generatePurchaseWhatsAppMessageFromData(testPurchase);
-        console.log('Test message generated successfully:', testMessage);
-        console.log('Test message length:', testMessage.length);
-    } catch (error) {
-        console.error('Error generating test message:', error);
-    }
     const phoneInput = document.getElementById('purchasePhoneNumber');
     if (phoneInput) {
         phoneInput.addEventListener('input', function(e) {
@@ -644,30 +481,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
-    // Make debug functions globally available
-    window.debugWhatsAppMessage = debugWhatsAppMessage;
-    window.debugPhoneNumber = debugPhoneNumber;
-    window.debugPhoneFormatting = debugPhoneFormatting;
-    window.testPhoneFormatting = testPhoneFormatting;
-    window.testWhatsAppURL = testWhatsAppURL;
-    window.generatePurchaseWhatsAppMessageFromData = generatePurchaseWhatsAppMessageFromData;
 });
 </script>
 
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" 5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " 5" style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="mb-0">Purchases</h2>
                 <div>
-                                         <button type="button" class="btn btn-outline-info btn-sm me-2" onclick="testPhoneFormatting()" title="Test Phone Number Formatting">
-                         <i class="bi bi-phone"></i> Test Phone Format
-                     </button>
-                     <button type="button" class="btn btn-outline-warning btn-sm me-2" onclick="testWhatsAppURL()" title="Test WhatsApp URL Generation">
-                         <i class="bi bi-whatsapp"></i> Test WhatsApp URL
-                     </button>
                     <!-- <a href="add_purchase.php" class="btn btn-primary">
                         <i class="bi bi-plus-circle"></i> Add New Purchase
                     </a> -->
@@ -683,27 +506,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             <?php endif; ?>
             
-            <!-- Debug Section for WhatsApp Testing -->
-            <?php if (isset($_GET['debug']) && $_GET['debug'] === 'whatsapp'): ?>
-                <div class="alert alert-info">
-                    <h6><i class="bi bi-bug me-2"></i>WhatsApp Debug Information</h6>
-                    <p><strong>Test Phone Numbers:</strong></p>
-                    <ul>
-                        <li>03001234567 → <?= testPhoneNumberFormat('03001234567') ?></li>
-                        <li>3001234567 → <?= testPhoneNumberFormat('3001234567') ?></li>
-                        <li>923001234567 → <?= testPhoneNumberFormat('923001234567') ?></li>
-                        <li>+92-300-123-4567 → <?= testPhoneNumberFormat('+92-300-123-4567') ?></li>
-                    </ul>
-                    <p><strong>Sample WhatsApp URL:</strong></p>
-                    <code>https://wa.me/923001234567?text=Test%20message</code>
-                    <br><br>
-                    <a href="https://wa.me/923001234567?text=Test%20message" target="_blank" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-whatsapp me-1"></i>Test WhatsApp Link
-                    </a>
+            <!-- Search and Filter Section -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-search me-2"></i>Search & Filter Purchases
+                    </h6>
                 </div>
-            <?php endif; ?>
-
-
+                <div class="card-body">
+                    <form method="GET" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="search" class="form-label">Search Purchases</label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="search" name="search" 
+                                       placeholder="Search by purchase no, supplier name, or contact..." 
+                                       value="<?= htmlspecialchars($search) ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="supplier_filter" class="form-label">Filter by Supplier</label>
+                            <select class="form-select" id="supplier_filter" name="supplier_filter">
+                                <option value="">All Suppliers</option>
+                                <?php foreach ($suppliers as $supplier): ?>
+                                    <option value="<?= $supplier['id'] ?>" <?= ($supplier_filter == $supplier['id']) ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($supplier['supplier_name']) ?> (<?= htmlspecialchars($supplier['supplier_contact']) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-search me-2"></i>Search
+                                </button>
+                                <a href="purchases.php" class="btn btn-secondary">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Clear
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Search Results Summary -->
+                    <?php if (!empty($search) || !empty($supplier_filter)): ?>
+                        <div class="mt-3 p-3 bg-info bg-opacity-10 border border-info rounded">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-info-circle text-info me-2"></i>
+                                <div>
+                                    <strong>Search Results:</strong>
+                                    <?php if (!empty($search)): ?>
+                                        <span class="badge bg-primary ms-2">Search: "<?= htmlspecialchars($search) ?>"</span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($supplier_filter)): ?>
+                                        <span class="badge bg-success ms-2">Supplier Filter Applied</span>
+                                    <?php endif; ?>
+                                    <span class="badge bg-secondary ms-2">Found: <?= count($purchases) ?> purchases</span>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
 
             <!-- Purchase List Table -->
             <div class="card shadow-sm">
@@ -792,10 +657,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                                     // Format phone number for WhatsApp - improved logic
                                                     $phone = preg_replace('/[^0-9]/', '', $purchase['supplier_contact']);
                                                     
-                                                    // Debug logging
-                                                    error_log("Original phone: " . $purchase['supplier_contact']);
-                                                    error_log("Cleaned phone: " . $phone);
-                                                    
                                                     // Handle different phone number formats - WhatsApp expects specific format
                                                     if (strlen($phone) == 10) {
                                                         // 10 digits: add 92 prefix (e.g., 3001234567 -> 923001234567)
@@ -848,8 +709,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                                         throw new Exception("Invalid mobile prefix after 92: " . $numberAfter92);
                                                     }
                                                     
-                                                    error_log("Final formatted phone: " . $phone);
-                                                    
                                                     // Generate WhatsApp message
                                                     $whatsappMessage = generatePurchaseWhatsAppMessage($purchase, $pdo);
                                                     
@@ -877,9 +736,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <a href="purchases.php?delete=<?= $purchase['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this purchase?')" title="Delete">
                                                 <i class="bi bi-trash"></i>
                                             </a>
-                                            <button type="button" class="btn btn-sm btn-outline-warning" onclick="debugWhatsAppMessage(<?= $purchase['id'] ?>)" title="Debug WhatsApp Message">
-                                                <i class="bi bi-bug"></i>
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>

@@ -1,10 +1,10 @@
-# 🧵 Clothing Shopping POS – Complete Project Overview (Final Update)
+# 🔌 Electronics POS – Complete Project Overview (Final Update)
 
 ## 🎯 Objective
 
-A full-featured POS system for a clothing store that manages:
+A full-featured POS system for an electronics store that manages:
 
-* Buying & selling (by **meter** or **piece**)
+* Buying & selling (by **piece** or **unit**)
 * Inventory, stock alerts, customer/supplier records
 * Invoicing & reporting
 * **Delivery reminders** & **low stock alerts**
@@ -34,9 +34,9 @@ A full-featured POS system for a clothing store that manages:
 
 ### 3. Product Management
 
-* Categories: Men, Women, Kids, etc.
-* Units: **Meters**, **Pieces**, **Sets**
-* Size, Color, Brand
+* Categories: Smartphones, Laptops, Accessories, etc.
+* Units: **Pieces**, **Units**, **Sets**
+* Brand, Model, Specifications
 * Cost/Sale price
 * Stock quantity
 * Barcode support (optional)
@@ -46,7 +46,7 @@ A full-featured POS system for a clothing store that manages:
 ### 4. Purchase Module
 
 * Buy from suppliers
-* Meter/piece-based quantity
+* Piece/unit-based quantity
 * Auto stock update
 * Purchase invoice
 * Return handling
@@ -56,7 +56,7 @@ A full-featured POS system for a clothing store that manages:
 ### 5. Sales Module
 
 * Sell to customers
-* Meter/piece-based checkout
+* Piece/unit-based checkout
 * Delivery date entry for custom orders
 * Print/download invoice
 * Return handling

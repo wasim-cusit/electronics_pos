@@ -12,16 +12,40 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Get form data
-$supplier_name = trim($_POST['supplier_name'] ?? '');
-$supplier_contact = trim($_POST['supplier_contact'] ?? '');
-$supplier_email = trim($_POST['supplier_email'] ?? '');
-$supplier_address = trim($_POST['supplier_address'] ?? '');
+// CSRF Protection
+if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+    echo json_encode(['success' => false, 'message' => 'Invalid request. Please try again.']);
+    exit;
+}
+
+// Get and sanitize form data
+$supplier_name = sanitize_input(trim($_POST['supplier_name'] ?? ''));
+$supplier_contact = sanitize_input(trim($_POST['supplier_contact'] ?? ''));
+$supplier_email = sanitize_input(trim($_POST['supplier_email'] ?? ''));
+$supplier_address = sanitize_input(trim($_POST['supplier_address'] ?? ''));
 $opening_balance = floatval($_POST['opening_balance'] ?? 0);
 
 // Validate required fields
 if (empty($supplier_name)) {
     echo json_encode(['success' => false, 'message' => 'Supplier name is required']);
+    exit;
+}
+
+// Validate email if provided
+if (!empty($supplier_email) && !validate_email($supplier_email)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid email format']);
+    exit;
+}
+
+// Validate phone if provided
+if (!empty($supplier_contact) && !validate_phone($supplier_contact)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid phone number format']);
+    exit;
+}
+
+// Validate name length
+if (!validate_length($supplier_name, 2, 100)) {
+    echo json_encode(['success' => false, 'message' => 'Supplier name must be between 2 and 100 characters']);
     exit;
 }
 

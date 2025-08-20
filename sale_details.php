@@ -67,28 +67,16 @@ try {
 // Use the stored subtotal from the sale table for consistency
 $grand_total = $sale['subtotal'] ?? 0;
 
-// Helper function to extract color from notes
-function extractColorFromNotes($notes) {
-    if (empty($notes)) {
-        return 'N/A';
-    }
-    
-    // Check if notes contain color information
-    if (strpos($notes, 'Color:') === 0) {
-        return trim(substr($notes, 6)); // Remove "Color: " prefix
-    }
-    
-    return 'N/A';
-}
+
 
 include 'includes/header.php';
 ?>
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="mb-0"><i class="bi bi-receipt text-primary"></i> Sale Details</h2>
+                <h2 class="mb-0"><i class="bi bi-receipt text-primary"></i> Electronics Sale Details</h2>
                 <div class="btn-group" role="group">
                     <a href="sales.php" class="btn btn-secondary">
                         <i class="bi bi-arrow-left"></i> Back to Sales
@@ -102,7 +90,7 @@ include 'includes/header.php';
             <!-- Sale Summary Information -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-receipt"></i> Sale Summary</h5>
+                    <h5 class="mb-0"><i class="bi bi-receipt"></i> Electronics Sale Summary</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -145,6 +133,16 @@ include 'includes/header.php';
                                     <td>
                                         <?php if ($sale['customer_contact']): ?>
                                             <i class="bi bi-telephone"></i> <?= htmlspecialchars($sale['customer_contact']) ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>CNIC:</strong></td>
+                                    <td>
+                                        <?php if ($sale['customer_cnic']): ?>
+                                            <i class="bi bi-card-text"></i> <?= htmlspecialchars($sale['customer_cnic']) ?>
                                         <?php else: ?>
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
@@ -262,7 +260,7 @@ include 'includes/header.php';
             <!-- Sale Items -->
             <div class="card">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Sale Items</h5>
+                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Electronics Sale Items</h5>
                 </div>
                 <div class="card-body table-responsive">
                     <table class="table table-bordered table-striped table-hover">
@@ -271,7 +269,6 @@ include 'includes/header.php';
                                 <th><i class="bi bi-hash"></i> #</th>
                                 <th><i class="bi bi-box"></i> Product Name</th>
                                 <th><i class="bi bi-tags"></i> Category</th>
-                                <th><i class="bi bi-palette"></i> Color</th>
                                 <th><i class="bi bi-rulers"></i> Unit</th>
                                 <th><i class="bi bi-123"></i> Quantity</th>
                                 <th><i class="bi bi-currency-dollar"></i> Unit Price</th>
@@ -294,16 +291,6 @@ include 'includes/header.php';
                                     <td><span class="badge bg-secondary"><?= $counter++ ?></span></td>
                                     <td><strong><?= htmlspecialchars($item['product_name']) ?></strong></td>
                                     <td><span class="badge bg-info"><?= htmlspecialchars($item['category_name_final']) ?></span></td>
-                                    <td>
-                                        <?php 
-                                        $color = extractColorFromNotes($item['notes'] ?? '');
-                                        if ($color !== 'N/A') {
-                                            echo '<span class="badge bg-light text-dark">' . htmlspecialchars($color) . '</span>';
-                                        } else {
-                                            echo '<span class="text-muted">-</span>';
-                                        }
-                                        ?>
-                                    </td>
                                     <td><?= htmlspecialchars($item['product_unit']) ?></td>
                                     <td><span class="badge bg-warning text-dark"><?= number_format($item['quantity'], 2) ?></span></td>
                                     <td><span class="badge bg-primary">PKR <?= number_format($item['price'], 2) ?></span></td>
@@ -319,7 +306,7 @@ include 'includes/header.php';
                                 </tr>
                             <?php endforeach; ?>
                             <tr class="table-warning">
-                                <td colspan="8" class="text-end"><strong><i class="bi bi-calculator"></i> Grand Total:</strong></td>
+                                <td colspan="7" class="text-end"><strong><i class="bi bi-calculator"></i> Grand Total:</strong></td>
                                 <td><strong><span class="badge bg-success fs-6">PKR <?= number_format($grand_total, 2) ?></span></strong></td>
                             </tr>
                         </tbody>

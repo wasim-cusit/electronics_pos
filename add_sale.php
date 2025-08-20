@@ -76,10 +76,26 @@ function get_available_stock_items($pdo, $product_id, $quantity)
 
 // Handle Add Sale
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
-    $customer_id = $_POST['customer_id'];
-    $walk_in_cust_name = $_POST['walk_in_cust_name'];
+    // CSRF Protection
+    if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+        $error = "Invalid request. Please try again.";
+        header("Location: add_sale.php?error=" . urlencode($error));
+        exit;
+    }
+    
+    // Sanitize and validate inputs
+    $customer_id = sanitize_input($_POST['customer_id']);
+    $walk_in_cust_name = sanitize_input($_POST['walk_in_cust_name']);
+    $walk_in_cust_cnic = sanitize_input($_POST['walk_in_cust_cnic'] ?? '');
     $invoice_no = get_next_sale_invoice_no($pdo);
-    $sale_date = $_POST['sale_date'];
+    $sale_date = sanitize_input($_POST['sale_date']);
+    
+    // Validate date
+    if (!strtotime($sale_date)) {
+        $error = "Invalid sale date.";
+        header("Location: add_sale.php?error=" . urlencode($error));
+        exit;
+    }
 
     // Calculate subtotal from sale items
     $subtotal = 0;
@@ -96,15 +112,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
     $paid_amount = floatval($_POST['paid_amount'] ?? 0);
     $due_amount = floatval($_POST['due_amount'] ?? 0);
     $payment_method_id = $_POST['payment_method_id'] ?? null;
-    $notes = $_POST['notes'] ?? '';
+    $notes = sanitize_input($_POST['notes'] ?? '');
     $created_by = $_SESSION['user_id'];
+    
+    // Validate amounts
+    if ($discount < 0 || $total_amount < 0 || $paid_amount < 0 || $due_amount < 0) {
+        $error = "Invalid amounts. All amounts must be positive.";
+        header("Location: add_sale.php?error=" . urlencode($error));
+        exit;
+    }
+    
+    if ($paid_amount > $total_amount) {
+        $error = "Paid amount cannot exceed total amount.";
+        header("Location: add_sale.php?error=" . urlencode($error));
+        exit;
+    }
 
-    // If walk-in customer is selected, use walk_in_cust_name
+    // If walk-in customer is selected, use walk_in_cust_name and walk_in_cust_cnic
     if ($customer_id === 'walk_in') {
         if (empty(trim($walk_in_cust_name))) {
             $error = "Walk-in customer name is required when selecting walk-in customer.";
         } else {
             $customer_id = null; // Use null for walk-in customers
+            $customer_cnic = $walk_in_cust_cnic; // Use walk-in customer CNIC
+        }
+    } else {
+        // Get customer CNIC if customer_id is provided
+        $customer_cnic = null;
+        if ($customer_id) {
+            $stmt = $pdo->prepare("SELECT cnic FROM customer WHERE id = ?");
+            $stmt->execute([$customer_id]);
+            $customer_cnic = $stmt->fetchColumn();
         }
     }
 
@@ -134,15 +172,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
             $pdo->beginTransaction();
 
             $after_discount = $subtotal - $discount;
-            $stmt = $pdo->prepare("INSERT INTO sale (customer_id, walk_in_cust_name, sale_no, sale_date, subtotal, discount, after_discount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$customer_id, $walk_in_cust_name, $invoice_no, $sale_date, $subtotal, $discount, $after_discount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
+            // Get customer CNIC if customer_id is provided
+            $customer_cnic = null;
+            if ($customer_id) {
+                $stmt = $pdo->prepare("SELECT cnic FROM customer WHERE id = ?");
+                $stmt->execute([$customer_id]);
+                $customer_cnic = $stmt->fetchColumn();
+            }
+            
+            $stmt = $pdo->prepare("INSERT INTO sale (customer_id, walk_in_cust_name, customer_cnic, sale_no, sale_date, subtotal, discount, after_discount, total_amount, paid_amount, due_amount, payment_method_id, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$customer_id, $walk_in_cust_name, $customer_cnic, $invoice_no, $sale_date, $subtotal, $discount, $after_discount, $total_amount, $paid_amount, $due_amount, $payment_method_id, $notes, $created_by]);
             $sale_id = $pdo->lastInsertId();
 
             // Handle sale items
             $product_ids = $_POST['product_id'];
             $quantities = $_POST['quantity'];
-            $colors = $_POST['color'] ?? [];
-            $custom_colors = $_POST['custom_color'] ?? [];
             $purchase_prices = $_POST['purchase_price'];
             $unit_prices = $_POST['unit_price'];
             $total_prices = $_POST['total_price'];
@@ -162,16 +206,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_sale'])) {
                         $product = $stmt->fetch(PDO::FETCH_ASSOC);
                         $category_name = $product && $product['category'] ? $product['category'] : '';
 
-                        // Get color information
-                        $color = '';
-                        if (isset($colors[$i]) && $colors[$i] === 'custom') {
-                            $color = $custom_colors[$i] ?? '';
-                        } elseif (isset($colors[$i]) && $colors[$i] !== '') {
-                            $color = $colors[$i];
-                        }
-
-                        // Create notes with color information
-                        $notes = $color ? "Color: " . $color : '';
+                        // Create notes (no color information needed for electronics)
+                        $notes = '';
 
                         // Insert sale item
                         $stmt = $pdo->prepare("INSERT INTO sale_items (sale_id, product_id, warehouse_id, product_code, price, stock_qty, quantity, total_price, category_name, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -249,9 +285,9 @@ include 'includes/header.php';
 <div class="container-fluid">
     <div class="row">
         <?php include 'includes/sidebar.php'; ?>
-        <main class="col-md-10 ms-sm-auto px-4 py-5" style="margin-top: 25px;">
+        <main class="col-md-10 ms-sm-auto px-4 " style="margin-top: 25px;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="mb-0"><i class="bi bi-cart-plus text-primary"></i> Add New Sale</h2>
+                <h2 class="mb-0"><i class="bi bi-cart-plus text-primary"></i> Add New Electronics Sale</h2>
             </div>
 
             <?php if (isset($_GET['success'])): ?>
@@ -271,10 +307,13 @@ include 'includes/header.php';
             <!-- Add Sale Form -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-cart-plus"></i> Create New Sale</h5>
+                    <h5 class="mb-0"><i class="bi bi-cart-plus"></i> Create New Electronics Sale</h5>
                 </div>
                 <div class="card-body">
                     <form method="post" id="saleForm">
+                        <!-- CSRF Protection -->
+                        <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+                        
                         <!-- Customer Information Section -->
                         <div class="row mb-4">
                             <div class="col-12">
@@ -298,27 +337,47 @@ include 'includes/header.php';
                                             🚶 Walk-in Customer
                                         </div>
                                         <?php foreach ($customers as $customer): ?>
-                                            <div class="customer-option" data-value="<?= $customer['id'] ?>">
+                                            <div class="customer-option" data-value="<?= $customer['id'] ?>" data-cnic="<?= htmlspecialchars($customer['cnic'] ?? '') ?>">
                                                 👤 <?= htmlspecialchars($customer['name']) ?>
+                                                <?php if (!empty($customer['cnic'])): ?>
+                                                    <br><small class="text-muted">🆔 CNIC: <?= htmlspecialchars($customer['cnic']) ?></small>
+                                                <?php endif; ?>
+                                                <?php if (!empty($customer['contact'])): ?>
+                                                    <br><small class="text-muted">📞 <?= htmlspecialchars($customer['contact']) ?></small>
+                                                <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
                                     <input type="hidden" name="customer_id" id="customerSelect" required>
                                 </div>
                             </div>
-                            <div class="mb-3" id="walkInCustomerField" style="display: none; width: 18%;">
-                                <label class="form-label fw-bold">Walk-in Customer Name <span class="text-danger">*</span></label>
-                                <input type="text" name="walk_in_cust_name" class="form-control" placeholder="Enter customer name" required>
-                            </div>
-                            <div class="mb-3" style="width: 14%;">
-                                <label class="form-label fw-bold">Sale Date <span class="text-danger">*</span></label>
-                                <input type="date" name="sale_date" class="form-control" required value="<?= date('Y-m-d') ?>">
-                            </div>
+                            <div class="customer-info-section">
+                                <div class="mb-3" id="walkInCustomerField" style="display: none; width: 18%;">
+                                    <label class="form-label fw-bold">Walk-in Customer Name <span class="text-danger">*</span></label>
+                                    <input type="text" name="walk_in_cust_name" class="form-control" placeholder="Enter customer name" required>
+                                </div>
+                                <div class="mb-3" id="walkInCnicField" style="display: none; width: 18%;">
+                                    <label class="form-label fw-bold">Walk-in Customer CNIC</label>
+                                    <div class="cnic-field">
+                                        <input type="text" name="walk_in_cust_cnic" class="form-control" placeholder="Enter CNIC (optional)" pattern="[0-9]{5}-[0-9]{7}-[0-9]{1}" title="Format: 12345-1234567-1">
+                                    </div>
+                                </div>
+                                <div class="mb-3" id="customerCnicField" style="display: none; width: 18%;">
+                                    <label class="form-label fw-bold">Customer CNIC</label>
+                                    <div class="cnic-field">
+                                        <input type="text" id="customerCnicDisplay" class="form-control" placeholder="CNIC will appear here" readonly>
+                                    </div>
+                                </div>
+                                <div class="mb-3" style="width: 14%;">
+                                    <label class="form-label fw-bold">Sale Date <span class="text-danger">*</span></label>
+                                    <input type="date" name="sale_date" class="form-control" required value="<?= date('Y-m-d') ?>">
+                                </div>
 
-                            <div class="col-md-3 mb-3" style="margin-top: 30px;">
-                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
-                                    <i class="bi bi-person-plus"></i> Add New Customer
-                                </button>
+                                <div class="mb-3" style="margin-top: 30px;">
+                                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
+                                        <i class="bi bi-person-plus"></i> Add New Customer
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -346,26 +405,12 @@ include 'includes/header.php';
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
-                                        <div style="width:13%" class="quantity-container">
+                                        <div style="width:18%" class="quantity-container">
                                             <label class="form-label small fw-bold">Qty <span class="text-danger">*</span></label>
                                             <input type="number" step="0.01" name="quantity[]" class="form-control quantity" placeholder="Qty" required min="0.01">
                                             <!-- Stock indicator will be dynamically added here -->
                                         </div>
-                                        <div style="width:13%">
-                                            <label class="form-label fw-bold">Color/Names</label>
-                                            <select name="color[]" class="form-control color-select" style="height: 38px;">
-                                                <option value="">Select Color</option>
-                                                <option value="Red">Red</option>
-                                                <option value="Blue">Blue</option>
-                                                <option value="Green">Green</option>
-                                                <option value="Yellow">Yellow</option>
-                                                <option value="Black">Black</option>
-                                                <option value="White">White</option>
-                                                <option value="Purple">Purple</option>
-                                                <option value="custom">+ Add Color</option>
-                                            </select>
-                                            <input type="text" name="custom_color[]" class="form-control custom-color-input mt-1" placeholder="Enter custom color names" style="height: 32px; display: none;">
-                                        </div>
+
                                         <div style="width:11%">
                                             <label class="form-label fw-bold">Purchase Price</label>
                                             <input type="number" step="0.01" name="purchase_price[]" class="form-control purchase-price" placeholder="P.Price" readonly>
@@ -454,7 +499,7 @@ include 'includes/header.php';
                         <!-- Submit Section -->
                         <div class="row">
                             <div class="col-12 text-center">
-                                <button type="submit" class="btn btn-primary btn-lg" name="add_sale" onclick="return validateColors()">
+                                <button type="submit" class="btn btn-primary btn-lg" name="add_sale">
                                     <i class="bi bi-check-circle"></i> Create Sale
                                 </button>
                                 <button type="reset" class="btn btn-secondary btn-lg ms-2">
@@ -496,12 +541,22 @@ include 'includes/header.php';
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">CNIC</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-card-text"></i></span>
+                                            <input type="text" name="cnic" class="form-control" placeholder="Enter CNIC (e.g., 12345-1234567-1)" pattern="[0-9]{5}-[0-9]{7}-[0-9]{1}" title="Format: 12345-1234567-1">
+                                        </div>
+                                        <small class="text-muted">Format: 12345-1234567-1 (optional)</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
                                         <label class="form-label fw-bold">Email Address</label>
                                         <div class="input-group">
                                             <span class="input-group-text"><i class="bi bi-envelope"></i></span>
                                             <input type="email" name="email" class="form-control" placeholder="Enter email address">
                                         </div>
                                     </div>
+                                </div>
+                                <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label fw-bold">Address</label>
                                         <div class="input-group">
@@ -509,8 +564,6 @@ include 'includes/header.php';
                                             <input type="text" name="address" class="form-control" placeholder="Enter address">
                                         </div>
                                     </div>
-                                </div>
-                                <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label fw-bold">Opening Balance</label>
                                         <div class="input-group">
@@ -577,12 +630,7 @@ include 'includes/header.php';
         // Clear all input values in the new row
         newRow.querySelectorAll('input, select').forEach(input => input.value = '');
 
-        // Hide custom color input in new row
-        const customColorInput = newRow.querySelector('.custom-color-input');
-        if (customColorInput) {
-            customColorInput.style.display = 'none';
-            customColorInput.required = false;
-        }
+
 
         // Remove any existing stock indicators - COMMENTED OUT
         /*
@@ -703,68 +751,80 @@ include 'includes/header.php';
             });
         });
 
-        // Initialize color dropdown functionality
-        initializeColorDropdowns();
+
     });
 
-    // Color dropdown functionality
-    function initializeColorDropdowns() {
-        document.addEventListener('change', function(e) {
-            if (e.target.classList.contains('color-select')) {
-                const row = e.target.closest('.sale-item-row');
-                const customInput = row.querySelector('.custom-color-input');
 
-                if (e.target.value === 'custom') {
-                    customInput.style.display = 'block';
-                    customInput.required = true;
-                    e.target.required = false;
-                } else {
-                    customInput.style.display = 'none';
-                    customInput.required = false;
-                    e.target.required = true;
-                }
-            }
-        });
-    }
 
-    // Color validation function
-    function validateColors() {
-        const colorSelects = document.querySelectorAll('select[name="color[]"]');
-        const customColorInputs = document.querySelectorAll('input[name="custom_color[]"]');
-        let isValid = true;
 
-        colorSelects.forEach((select, index) => {
-            if (select.value === 'custom') {
-                // Check if custom color input has value
-                const customInput = select.closest('.sale-item-row').querySelector('.custom-color-input');
-
-                if (!customInput.value.trim()) {
-                    showNotification(`Please enter a custom color name for item ${index + 1}`, 'warning');
-                    isValid = false;
-                    return;
-                }
-            } else if (select.value === '') {
-                showNotification(`Please select a color for item ${index + 1}`, 'warning');
-                isValid = false;
-                return;
-            }
-        });
-
-        return isValid;
-    }
 
     // Function to handle customer selection changes
     function handleCustomerSelection(customerId) {
         const walkInField = document.getElementById('walkInCustomerField');
+        const walkInCnicField = document.getElementById('walkInCnicField');
+        const customerCnicField = document.getElementById('customerCnicField');
+        const customerCnicDisplay = document.getElementById('customerCnicDisplay');
+        
         if (customerId === 'walk_in') {
             walkInField.style.display = 'block';
             walkInField.querySelector('input').required = true;
+            walkInCnicField.style.display = 'block';
+            walkInCnicField.querySelector('input').required = false;
+            customerCnicField.style.display = 'none';
+            customerCnicDisplay.value = '';
         } else {
             walkInField.style.display = 'none';
             walkInField.querySelector('input').required = false;
             walkInField.querySelector('input').value = '';
+            walkInCnicField.style.display = 'none';
+            walkInCnicField.querySelector('input').value = '';
+            
+            // Show CNIC if customer has one
+            const selectedOption = document.querySelector(`[data-value="${customerId}"]`);
+            if (selectedOption && selectedOption.dataset.cnic) {
+                customerCnicField.style.display = 'block';
+                customerCnicDisplay.value = selectedOption.dataset.cnic;
+            } else {
+                customerCnicField.style.display = 'none';
+                customerCnicDisplay.value = '';
+            }
         }
     }
+
+    // CNIC format validation and auto-formatting
+    function formatCNIC(input) {
+        let value = input.value.replace(/\D/g, ''); // Remove non-digits
+        
+        if (value.length <= 5) {
+            input.value = value;
+        } else if (value.length <= 12) {
+            input.value = value.slice(0, 5) + '-' + value.slice(5);
+        } else {
+            input.value = value.slice(0, 5) + '-' + value.slice(5, 12) + '-' + value.slice(12, 13);
+        }
+        
+        // Validate format
+        const pattern = /^\d{5}-\d{7}-\d{1}$/;
+        if (input.value && !pattern.test(input.value)) {
+            input.classList.add('is-invalid');
+        } else {
+            input.classList.remove('is-invalid');
+        }
+    }
+
+    // Add CNIC formatting to all CNIC input fields
+    document.addEventListener('DOMContentLoaded', function() {
+        const cnicInputs = document.querySelectorAll('input[name="walk_in_cust_cnic"], input[name="cnic"]');
+        cnicInputs.forEach(input => {
+            input.addEventListener('input', function() {
+                formatCNIC(this);
+            });
+            
+            input.addEventListener('blur', function() {
+                formatCNIC(this);
+            });
+        });
+    });
 
     document.addEventListener('change', function(e) {
         if (e.target.classList.contains('product-select')) {
@@ -1414,5 +1474,50 @@ include 'includes/header.php';
 
     .customer-option.hidden {
         display: none;
+    }
+
+    /* CNIC field styling */
+    .cnic-field {
+        position: relative;
+    }
+
+    .cnic-field input[pattern] {
+        font-family: 'Courier New', monospace;
+        letter-spacing: 1px;
+    }
+
+    .cnic-field input:valid {
+        border-color: #28a745;
+        background-color: rgba(40, 167, 69, 0.05);
+    }
+
+    .cnic-field input:invalid:not(:placeholder-shown) {
+        border-color: #dc3545;
+        background-color: rgba(220, 53, 69, 0.05);
+    }
+
+    /* Customer information fields layout */
+    .customer-info-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        align-items: flex-end;
+    }
+
+    .customer-info-section .mb-3 {
+        margin-bottom: 0 !important;
+    }
+
+    /* Responsive adjustments for customer fields */
+    @media (max-width: 1200px) {
+        .customer-info-section .mb-3 {
+            width: calc(50% - 7.5px) !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .customer-info-section .mb-3 {
+            width: 100% !important;
+        }
     }
 </style>

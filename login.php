@@ -1,17 +1,26 @@
 <?php
 require_once 'includes/auth.php';
 require_once 'includes/flash.php';
+require_once 'includes/config.php';
 redirect_if_logged_in();
 $error = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'] ?? '';
-    $password = $_POST['password'] ?? '';
-    if (login($username, $password)) {
-        require_once 'includes/config.php';
-        header('Location: ' . $base_url . 'dashboard.php');
-        exit;
+    // CSRF Protection
+    if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token'])) {
+        $error = "Invalid request. Please try again.";
     } else {
-        $error = 'Invalid username or password.';
+        $username = sanitize_input($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+        
+        if (empty($username) || empty($password)) {
+            $error = 'Username and password are required.';
+        } elseif (login($username, $password)) {
+            header('Location: ' . $base_url . 'dashboard.php');
+            exit;
+        } else {
+            $error = 'Invalid username or password.';
+        }
     }
 }
 ?>
@@ -20,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Clothing POS System</title>
+    <title>Login - Electronics POS System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <style>
@@ -84,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="col-md-4">
             <div class="card login-card p-4 shadow-lg">
                 <div class="login-header">
-                    <h1><i class="bi bi-shop me-2"></i>Clothing POS</h1>
+                    <h1><i class="bi bi-shop me-2"></i>Electronics POS</h1>
                     <p>Sign in to your account</p>
                 </div>
                 
@@ -97,6 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
                 
                 <form method="post">
+                    <!-- CSRF Protection -->
+                    <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+                    
                     <div class="mb-3">
                         <label for="username" class="form-label">
                             <i class="bi bi-person me-2"></i>Username
